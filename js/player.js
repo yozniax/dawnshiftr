@@ -280,8 +280,8 @@ function render(state) {
   if (state.status === "error") status = `<span class="err">ERR: ${escapeHtml(state.error || "failed")}</span>`;
   else if (state.status === "buffering") status = "◌ Buffering…";
   else if (state.status === "playing") status = state.live ? "● Streaming" : "▶ Playing";
-  else if (state.status === "paused") status = "❚❚ Paused";
-  else status = "■ Stopped";
+  else if (state.status === "paused") status = "❚❚ Paused (click to play)";
+  else status = "■ Stopped (click to play)";
   const right = state.live ? "LIVE" : fmtTime(state.duration);
   document.getElementById("status-line").innerHTML =
     `${fmtTime(state.currentTime)} / ${right}  ${status}`;
@@ -491,6 +491,11 @@ function openPicker(kind, names, current, onPick, title) {
     },
   });
 }
+
+document.getElementById("status-line").style.cursor = "pointer";
+document.getElementById("status-line").addEventListener("click", () => client.command("toggle"));
+document.getElementById("track-title").style.cursor = "pointer";
+document.getElementById("track-title").addEventListener("click", () => client.command("toggle"));
 
 document.getElementById("stream-bar").addEventListener("click", (e) => {
   const s = client.state;
