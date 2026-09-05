@@ -1,8 +1,8 @@
-# cliamp for Chrome
+# broamp
 
-[cliamp](https://www.cliamp.stream/#install) に着想を得た、Chrome 拡張のターミナル風ミュージックプレイヤーです。Winamp のような 10-band EQ、ビジュアライザ、プレイリスト、Radio Browser（3万局超）をサイドパネルに載せます。
+Winamp 風のターミナル UI を Chrome のサイドパネルに載せたミュージックプレイヤーです。ラジオ、プレイリスト、10-band EQ、ビジュアライザをブラウザだけで使えます。
 
-Spotify / Tidal などの OAuth 配信は含みません。ブラウザで完結するラジオ・ローカルファイル・任意 URL に絞っています。
+Spotify / Tidal などの OAuth 配信は含みません。ラジオ・ローカルファイル・任意 URL に絞っています。
 
 ## デモ（開発サーバ）
 
@@ -18,7 +18,7 @@ npm start
 2. デベロッパーモードをオン
 3. **パッケージ化されていない拡張機能を読み込む**
 4. このフォルダを選択
-5. ツールバーの cliamp アイコンをクリック（サイドパネル）
+5. ツールバーの broamp アイコンをクリック（サイドパネル）
 
 アイコンを右クリックすると、独立ウィンドウまたはタブでも開けます。音声は offscreen document で再生されるので、パネルを閉じても続きから聴けます。
 
@@ -28,11 +28,11 @@ npm start
 - `R` で Radio Browser 検索、`N` で国別
 - `u` でストリーム / M3U / PLS URL
 - `o` でローカル音声ファイル
-- 10-band EQ（cliamp と同じプリセット: Rock, Pop, Jazz…）
+- 10-band EQ（Rock, Pop, Jazz などのプリセット）
 - ビジュアライザ: spectrum / mirror / waveform / scope / particles / heartbeat
 - 21 テーマ（hackerman, winamp, tokyo-night, catppuccin…）
 - お気に入り・再生履歴・lrclib 歌詞
-- cliamp に寄せたキーバインド（`?` で一覧）
+- キーボード操作（`?` で一覧）
 
 ## キー（抜粋）
 
@@ -60,4 +60,4 @@ js/               エンジン・ラジオ・UI
 
 ## ライセンス
 
-MIT。オリジナルの [cliamp](https://github.com/bjarneo/cliamp) も MIT です。本プロジェクトは非公式のブラウザ移植です。
+MIT.

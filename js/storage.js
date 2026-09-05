@@ -1,4 +1,4 @@
-const KEY = "cliamp-state-v1";
+const KEY = "broamp-state-v1";
 
 const memory = {};
 

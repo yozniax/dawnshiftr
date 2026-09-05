@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "cliamp",
+  "name": "broamp",
   "version": "1.0.0",
-  "description": "Winamp for Chrome. Radio, playlists, 10-band EQ, visualizers — a terminal music player in the side panel.",
+  "description": "Winamp-style terminal music player for Chrome. Radio, playlists, 10-band EQ, visualizers in the side panel.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",
@@ -10,7 +10,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "cliamp",
+    "default_title": "broamp",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -59,7 +59,7 @@
     },
     "open-player": {
       "suggested_key": { "default": "Ctrl+Shift+P" },
-      "description": "Open cliamp"
+      "description": "Open broamp"
     }
   }
 }

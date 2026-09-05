@@ -1,5 +1,4 @@
 import http from "node:http";
-import https from "node:https";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,70 +34,7 @@ function safeJoin(urlPath) {
   return full;
 }
 
-function proxyRequest(req, res, target) {
-  let dest;
-  try {
-    dest = new URL(target);
-  } catch {
-    res.writeHead(400, { "content-type": "text/plain" });
-    res.end("bad url");
-    return;
-  }
-  if (dest.protocol !== "http:" && dest.protocol !== "https:") {
-    res.writeHead(400, { "content-type": "text/plain" });
-    res.end("bad url");
-    return;
-  }
-
-  const lib = dest.protocol === "https:" ? https : http;
-  const upstream = lib.request(
-    {
-      protocol: dest.protocol,
-      hostname: dest.hostname,
-      port: dest.port || (dest.protocol === "https:" ? 443 : 80),
-      path: dest.pathname + dest.search,
-      method: "GET",
-      headers: {
-        "User-Agent": "cliamp-chrome/1.0",
-        Accept: "*/*",
-        "Icy-MetaData": "0",
-        Connection: "keep-alive",
-      },
-    },
-    (upRes) => {
-      const type = upRes.headers["content-type"] || "application/octet-stream";
-      res.writeHead(upRes.statusCode || 200, {
-        "Content-Type": type,
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "no-store",
-      });
-      upRes.on("error", () => {
-        if (!res.writableEnded) res.destroy();
-      });
-      upRes.pipe(res);
-    }
-  );
-
-  const abort = () => {
-    upstream.destroy();
-  };
-  req.on("aborted", abort);
-  res.on("close", () => {
-    if (!res.writableFinished) abort();
-  });
-  upstream.on("error", (err) => {
-    if (!res.headersSent) {
-      res.writeHead(502, { "content-type": "text/plain" });
-      res.end(String(err.message || err));
-    } else if (!res.writableEnded) {
-      res.destroy();
-    }
-  });
-  upstream.setTimeout(0);
-  upstream.end();
-}
-
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
   const host = req.headers.host || `127.0.0.1:${PORT}`;
   const url = new URL(req.url || "/", `http://${host}`);
 
@@ -109,7 +45,40 @@ const server = http.createServer((req, res) => {
       res.end("bad url");
       return;
     }
-    proxyRequest(req, res, target);
+    try {
+      const incoming = await fetch(target, {
+        headers: {
+          "User-Agent": "broamp/1.0",
+          Accept: "*/*",
+        },
+        redirect: "follow",
+      });
+      const type = incoming.headers.get("content-type") || "audio/mpeg";
+      res.writeHead(incoming.ok ? 200 : incoming.status, {
+        "Content-Type": type,
+        "Access-Control-Allow-Origin": "*",
+        "Cache-Control": "no-store",
+      });
+      if (req.method === "HEAD" || !incoming.body) {
+        res.end();
+        return;
+      }
+      const reader = incoming.body.getReader();
+      req.on("close", () => {
+        reader.cancel().catch(() => {});
+      });
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (!res.write(Buffer.from(value))) {
+          await new Promise((resolve) => res.once("drain", resolve));
+        }
+      }
+      res.end();
+    } catch (err) {
+      if (!res.headersSent) res.writeHead(502, { "content-type": "text/plain" });
+      res.end(String(err?.message || err));
+    }
     return;
   }
 
@@ -141,11 +110,6 @@ const server = http.createServer((req, res) => {
   });
 });
 
-server.requestTimeout = 0;
-server.headersTimeout = 0;
-server.keepAliveTimeout = 0;
-server.timeout = 0;
-
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`cliamp preview http://127.0.0.1:${PORT}`);
+  console.log(`broamp preview http://127.0.0.1:${PORT}`);
 });

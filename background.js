@@ -17,7 +17,7 @@ async function ensureOffscreen() {
   await chrome.offscreen.createDocument({
     url: OFFSCREEN_URL,
     reasons: ["AUDIO_PLAYBACK"],
-    justification: "Keep cliamp radio and local audio playing in the background",
+    justification: "Keep broamp radio and local audio playing in the background",
   });
 }
 
@@ -64,8 +64,8 @@ chrome.runtime.onConnect.addListener((port) => {
 chrome.runtime.onInstalled.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: "open-window", title: "Open cliamp window", contexts: ["action"] });
-    chrome.contextMenus.create({ id: "open-tab", title: "Open cliamp in tab", contexts: ["action"] });
+    chrome.contextMenus.create({ id: "open-window", title: "Open broamp window", contexts: ["action"] });
+    chrome.contextMenus.create({ id: "open-tab", title: "Open broamp in tab", contexts: ["action"] });
   });
 });
 

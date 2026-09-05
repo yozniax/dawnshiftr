@@ -162,7 +162,7 @@ function renderOverlay() {
         <span>Tab</span><span>Focus (playlist / EQ / vol / speed)</span>
         <span>?</span><span>This help</span>
       </div>
-      <div class="hint" style="margin-top:10px">Esc closes. Inspired by cliamp.</div>`;
+      <div class="hint" style="margin-top:10px">Esc closes.</div>`;
     return;
   }
   if (kind === "lyrics") {
@@ -766,8 +766,8 @@ function updateMediaSession(state) {
   if (!("mediaSession" in navigator)) return;
   const track = state.playlist[state.index];
   navigator.mediaSession.metadata = new MediaMetadata({
-    title: track?.title || "cliamp",
-    artist: "cliamp",
+    title: track?.title || "broamp",
+    artist: "broamp",
     album: track?.tags || "Radio",
   });
   navigator.mediaSession.playbackState = state.status === "playing" ? "playing" : "paused";
