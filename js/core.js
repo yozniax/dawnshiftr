@@ -4,8 +4,17 @@ import { loadPersisted, savePersisted } from "./storage.js";
 import { IcyWatcher } from "./icy.js";
 import { parseYouTubeUrl, youtubeTrack, YouTubeEngine } from "./youtube.js";
 
-export const SLEEP_PRESETS = [60, 55, 30, 25, 10, 5, 3, 1];
+export const SLEEP_PRESETS = [180, 120, 60, 55, 30, 25, 10, 5, 3, 1];
 export const FADE_MS = 15_000;
+export const PT_MINUTES = 25;
+
+export function sleepChipLabel(mins) {
+  if (mins === 180) return "3h";
+  if (mins === 120) return "2h";
+  if (mins === 60) return "1h";
+  if (mins === 25) return "PT";
+  return String(mins);
+}
 
 export function trackKey(t) {
   return t?.id || t?.url || "";
@@ -263,6 +272,7 @@ export class PlayerCore {
   finishSleepTimer() {
     if (this._sleepDone) return;
     this._sleepDone = true;
+    const announcePt = this.state.sleepMinutes === PT_MINUTES;
     this.stopSleepLoop();
     this.clearSleepAlarm();
     this.state.sleepMinutes = null;
@@ -272,6 +282,17 @@ export class PlayerCore {
     this.applyVolume();
     this.persist();
     this.broadcast();
+    if (announcePt) this.announceTimeUp();
+  }
+
+  announceTimeUp() {
+    const src =
+      typeof chrome !== "undefined" && chrome.runtime?.getURL
+        ? chrome.runtime.getURL("audio/time-up.mp3")
+        : new URL("../audio/time-up.mp3", import.meta.url).href;
+    const clip = new Audio(src);
+    clip.volume = 1;
+    void clip.play().catch(() => {});
   }
 
   armSleepAlarm() {
@@ -508,6 +529,10 @@ export class PlayerCore {
     this.persist();
   }
 
+  nudgeVolume(delta) {
+    this.setVolume(this.state.volume + Number(delta || 0));
+  }
+
   keepSession() {
     return this.state.status === "playing" || this.state.status === "buffering" || this.state.status === "paused";
   }
@@ -552,9 +577,20 @@ export class PlayerCore {
 
   hideStation(i) {
     if (i < 0 || i >= this.state.playlist.length) return;
-    const key = trackKey(this.state.playlist[i]);
-    if (key && !this.state.hidden.includes(key)) this.state.hidden = [...this.state.hidden, key];
-    this.removeAt(i);
+    this.hideTrack(this.state.playlist[i]);
+  }
+
+  hideTrack(track) {
+    const key = trackKey(track);
+    if (!key) return;
+    if (!this.state.hidden.includes(key)) this.state.hidden = [...this.state.hidden, key];
+    const i = this.state.playlist.findIndex((t) => trackKey(t) === key);
+    if (i >= 0) {
+      this.removeAt(i);
+      return;
+    }
+    this.persist();
+    this.broadcast();
   }
 
   unhideAll() {

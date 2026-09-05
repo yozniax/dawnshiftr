@@ -1,4 +1,4 @@
-import { PlayerCore, isExtension, defaultState, SLEEP_PRESETS, FADE_MS, trackKey } from "./core.js";
+import { PlayerCore, isExtension, defaultState, SLEEP_PRESETS, FADE_MS, trackKey, sleepChipLabel } from "./core.js";
 import { searchStations, stationsByCountry, REGIONS } from "./radio.js";
 import { attachEqVis } from "./eq-vis.js";
 
@@ -145,13 +145,15 @@ function renderOverlay() {
         <span>Enter</span><span>Play highlighted</span>
         <span>↑ ↓</span><span>Move cursor</span>
         <span>F</span><span>Fav highlighted</span>
-        <span>M</span><span>Note highlighted</span>
-        <span>X</span><span>Delete highlighted</span>
+        <span>N</span><span>Note highlighted</span>
+        <span>X / D</span><span>Delete highlighted</span>
+        <span>- / =</span><span>Volume down / up</span>
+        <span>S</span><span>Stations tab</span>
+        <span>P</span><span>Sleep PT (25 min)</span>
         <span>Shift+F</span><span>Fav tab</span>
         <span>Shift+T</span><span>Stations tab</span>
         <span>Shift+H</span><span>History tab</span>
         <span>Shift+C</span><span>Countries tab</span>
-        <span>S</span><span>Sleep 10 min</span>
         <span>Esc</span><span>Fav / close</span>
       </div>
       <div class="hint" style="margin-top:10px">Esc closes</div>
@@ -244,8 +246,9 @@ function renderChrome(state) {
   song.classList.toggle("empty", !title);
   const note = noteText(track);
   const noteEl = document.getElementById("now-note");
-  noteEl.hidden = !note;
-  noteEl.textContent = note;
+  noteEl.hidden = false;
+  noteEl.textContent = note || "\u00a0";
+  noteEl.classList.toggle("empty", !note);
   document.getElementById("btn-play").textContent = state.status === "playing" ? "❚❚" : "▶";
   const vol = document.getElementById("vol-slider");
   if (document.activeElement !== vol) vol.value = String(state.volume ?? 80);
@@ -283,7 +286,7 @@ function renderSleepChips(state) {
   el.dataset.sig = sig;
   el.innerHTML = SLEEP_PRESETS.map((mins) => {
     const on = state.sleepMinutes === mins ? "on" : "";
-    return `<button type="button" class="chip ${on}" data-sleep="${mins}">${mins}</button>`;
+    return `<button type="button" class="chip ${on}" data-sleep="${mins}">${sleepChipLabel(mins)}</button>`;
   }).join("");
 }
 
@@ -374,6 +377,11 @@ function localCatalog() {
   return out;
 }
 
+function isHiddenTrack(t) {
+  const key = trackKey(t);
+  return Boolean(key && client.state.hidden?.includes(key));
+}
+
 function mergeTracks(primary, extra) {
   const seen = new Set(primary.map(trackKey).filter(Boolean));
   const out = [...primary];
@@ -433,8 +441,14 @@ function bindStationRows(tracks, { history = false } = {}) {
         } else if (pane === "fav") {
           client.command("toggleFavorite", track);
         } else {
-          const qi = client.state.playlist.findIndex((t) => trackKey(t) === trackKey(track));
-          if (qi >= 0) client.command("hideStation", qi);
+          client.command("hideTrack", track);
+          if (pane === "stations") {
+            stationsItems = stationsItems.filter((t) => trackKey(t) !== trackKey(track));
+            renderStations();
+          } else if (pane === "countries" && countryStations) {
+            countryStations = countryStations.filter((t) => trackKey(t) !== trackKey(track));
+            renderCountries();
+          }
         }
       }
     });
@@ -521,7 +535,7 @@ async function searchStationsPane(q) {
     }
     if (seq !== stationsSeq) return;
     stationsLoading = false;
-    stationsItems = mergeTracks(localHits, remote);
+    stationsItems = mergeTracks(localHits, remote).filter((t) => !isHiddenTrack(t));
     stationsError = stationsItems.length ? "" : remoteErr;
     if (pane === "stations") renderStations();
   } catch (err) {
@@ -556,7 +570,7 @@ function filteredRegions() {
 
 function countryStationList() {
   const q = countryQuery.trim().toLowerCase();
-  return (countryStations || []).filter((t) => !q || trackHaystack(t).includes(q));
+  return (countryStations || []).filter((t) => !isHiddenTrack(t) && (!q || trackHaystack(t).includes(q)));
 }
 
 function renderCountries() {
@@ -691,7 +705,7 @@ function deleteHighlight() {
   if (!track) return;
   if (pane === "history") {
     client.command("removeHistory", track);
-    browseCursor = 0;
+    browseCursor = Math.max(0, browseCursor - 1);
     renderHistory();
     return;
   }
@@ -699,8 +713,16 @@ function deleteHighlight() {
     client.command("toggleFavorite", track);
     return;
   }
-  const qi = client.state.playlist.findIndex((t) => trackKey(t) === trackKey(track));
-  if (qi >= 0) client.command("hideStation", qi);
+  client.command("hideTrack", track);
+  if (pane === "stations") {
+    stationsItems = stationsItems.filter((t) => trackKey(t) !== trackKey(track));
+    renderStations();
+  } else if (pane === "countries") {
+    if (countryStations) {
+      countryStations = countryStations.filter((t) => trackKey(t) !== trackKey(track));
+      renderCountries();
+    }
+  }
 }
 
 function openMemo(track) {
@@ -740,7 +762,7 @@ document.querySelector(".now-card").addEventListener("click", (e) => {
 document.querySelector(".toolbar-btns").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-pane]");
   if (!btn) return;
-  setPane(btn.dataset.pane, { focusSearch: true });
+  setPane(btn.dataset.pane);
 });
 
 let searchTimer = 0;
@@ -849,8 +871,25 @@ document.addEventListener("keydown", async (e) => {
     activateHighlight();
     return;
   }
-  if (key === "s" && !e.shiftKey) {
-    client.command("stop");
+  if (e.code === "KeyS" && !e.shiftKey) {
+    e.preventDefault();
+    setPane("stations");
+    return;
+  }
+  if (e.code === "KeyP" && !e.shiftKey) {
+    e.preventDefault();
+    client.command("setSleepTimer", 25);
+    toast("Sleep PT");
+    return;
+  }
+  if (key === "-" || key === "_" || e.code === "Minus" || e.code === "NumpadSubtract" || e.code === "BracketLeft") {
+    e.preventDefault();
+    client.command("nudgeVolume", -5);
+    return;
+  }
+  if (key === "=" || key === "+" || e.code === "Equal" || e.code === "NumpadAdd" || e.code === "BracketRight") {
+    e.preventDefault();
+    client.command("nudgeVolume", 5);
     return;
   }
   if (key === "ArrowDown") {
@@ -871,21 +910,17 @@ document.addEventListener("keydown", async (e) => {
     client.command("prev");
     return;
   }
-  if (key === "m" || key === "M") {
+  if (e.code === "KeyN" || e.code === "KeyM") {
     e.preventDefault();
     noteHighlight();
     return;
   }
-  if ((key === "f" || key === "F") && !e.shiftKey) {
+  if (e.code === "KeyF" && !e.shiftKey) {
     e.preventDefault();
     favHighlight();
     return;
   }
-  if (key === "S") {
-    client.command("setSleepTimer", 10);
-    return;
-  }
-  if (key === "x" || key === "X" || key === "Delete") {
+  if (e.code === "KeyX" || e.code === "KeyD" || key === "Delete" || key === "Backspace") {
     e.preventDefault();
     deleteHighlight();
     return;

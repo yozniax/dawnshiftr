@@ -24,7 +24,7 @@ Audio keeps playing in an offscreen document if you close the window.
 - Radio Browser search (includes station notes), play history, country lists
 - Station notes
 - Hide a station with DELETE
-- Sleep timer: last ~15 seconds fade, remaining time counts down
+- Sleep timer: last ~15 seconds fade. PT (25 min) says “Your Time is up!” when it ends
 - Play the current YouTube tab from the toolbar icon
 - Live song title when the stream sends ICY metadata
 - Equalizer-style level display while playing
@@ -36,9 +36,11 @@ Audio keeps playing in an offscreen document if you close the window.
 | `Space` | Play / pause |
 | `Enter` | Play cursor |
 | `↑` / `↓` | Move cursor |
-| `F` / `M` / `X` | Fav / note / delete highlighted |
+| `F` / `N` / `X` | Fav / note / delete highlighted |
+| `-` / `=` | Volume down / up |
+| `S` | Stations tab |
+| `P` | Sleep PT (25 min) |
 | `Shift+F` / `T` / `H` / `C` | Fav / stations / history / countries |
-| `S` | Sleep 10 min |
 | `Esc` | Fav / close |
 | `?` | Shortcuts |
 
