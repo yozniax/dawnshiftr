@@ -29,6 +29,12 @@ body { overflow: hidden; }
 button, input, textarea {
   font: inherit;
   color: inherit;
+  text-transform: uppercase;
+}
+
+::placeholder {
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 #app {

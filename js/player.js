@@ -147,7 +147,7 @@ function renderOverlay() {
   if (kind === "memo") {
     overlayEl.innerHTML = `<h2>Station note</h2>
       <div class="hint">${escapeHtml(overlay.track?.title || "")}</div>
-      <textarea id="memo-text" rows="4" placeholder="e.g. Night work, few vocals">${escapeHtml(body || "")}</textarea>
+      <textarea id="memo-text" rows="4" placeholder="E.G. NIGHT WORK, FEW VOCALS">${escapeHtml(body || "")}</textarea>
       <div class="overlay-actions">
         <button type="button" class="primary" data-memo="save">Save</button>
         <button type="button" data-memo="clear">Clear</button>
@@ -170,7 +170,7 @@ function renderOverlay() {
   }
   overlayEl.innerHTML = `<h2>${escapeHtml(title || kind.toUpperCase())}</h2>
     <div class="hint">${escapeHtml(hint || "↑↓ move · Enter select · Esc close")}</div>
-    ${kind === "radio" ? `<input id="overlay-search" type="search" placeholder="Search…" value="${escapeAttr(query)}" />` : ""}
+    ${kind === "radio" ? `<input id="overlay-search" type="search" placeholder="SEARCH…" value="${escapeAttr(query)}" />` : ""}
     <div class="results" id="overlay-results"></div>`;
   bindOverlayInput();
   renderOverlayResults();
@@ -263,25 +263,25 @@ client.subscribe((state, kind) => {
 });
 
 function statusCopy(state) {
-  if (state.status === "error") return `Error: ${state.error || "can't play"}`;
-  if (state.status === "buffering") return "Tuning…";
-  if (state.status === "playing") return state.live ? "On air" : "Playing";
-  if (state.status === "paused") return "Paused";
-  return "Stopped";
+  if (state.status === "error") return `ERROR: ${state.error || "CAN'T PLAY"}`;
+  if (state.status === "buffering") return "TUNING…";
+  if (state.status === "playing") return state.live ? "ON AIR" : "PLAYING";
+  if (state.status === "paused") return "PAUSED";
+  return "STOPPED";
 }
 
 function renderChrome(state) {
   const track = state.playlist[state.index];
-  document.getElementById("source-label").textContent = "Radio";
+  document.getElementById("source-label").textContent = "RADIO";
   document.getElementById("now-kicker").textContent = statusCopy(state);
-  document.getElementById("track-title").textContent = track?.title || "Pick a station";
+  document.getElementById("track-title").textContent = track?.title || "PICK A STATION";
   const song = document.getElementById("song-title");
   const title = state.songTitle;
   if (title) {
     song.textContent = title;
     song.classList.remove("empty");
   } else {
-    song.textContent = state.status === "playing" || state.status === "buffering" ? "Waiting for title…" : "No title yet";
+    song.textContent = state.status === "playing" || state.status === "buffering" ? "WAITING FOR TITLE…" : "NO TITLE YET";
     song.classList.add("empty");
   }
   const note = noteText(track);
@@ -307,9 +307,9 @@ function updateSleepClock(state) {
   if (!label) return;
   if (state.sleepEndsAt) {
     const mins = Math.max(1, Math.ceil(remaining / 60_000));
-    label.textContent = `Sleeping in ${mins} min`;
+    label.textContent = `SLEEPING IN ${mins} MIN`;
   } else {
-    label.textContent = "Sleep";
+    label.textContent = "SLEEP";
   }
   label.classList.toggle("counting", Boolean(state.sleepEndsAt));
   label.classList.toggle("fading", fading);
@@ -381,7 +381,7 @@ function renderList(state) {
         </div>
         <div class="track-side">
           <button type="button" class="mini" data-fav="${i}" title="Favorite">${star}</button>
-          <button type="button" class="mini" data-memo="${i}" title="Note">note</button>
+          <button type="button" class="mini" data-memo="${i}" title="Note">NOTE</button>
           <button type="button" class="mini hide" data-hide="${i}" title="Hide">x</button>
         </div>
       </div>`;
