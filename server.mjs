@@ -15,6 +15,7 @@ const MIME = {
   ".svg": "image/svg+xml",
   ".ico": "image/x-icon",
   ".map": "application/json",
+  ".mp3": "audio/mpeg",
 };
 
 function sendFile(res, filePath) {

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Winamp-style terminal music player as a Chrome extension",
+  "description": "Bedside radio with station notes, sleep timer, and white noise",
   "scripts": {
     "start": "node server.mjs",
     "preview": "node server.mjs"

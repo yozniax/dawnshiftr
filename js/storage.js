@@ -1,6 +1,4 @@
-const KEY = "broamp-state-v1";
-
-const memory = {};
+const KEY = "broamp-state-v2";
 
 function chromeStorage() {
   return globalThis.chrome?.storage?.local;
@@ -28,6 +26,5 @@ export async function savePersisted(partial) {
   } else {
     localStorage.setItem(KEY, JSON.stringify(next));
   }
-  Object.assign(memory, next);
   return next;
 }

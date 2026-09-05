@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "broamp",
   "version": "1.0.0",
-  "description": "Winamp-style terminal music player for Chrome. Click the icon for a compact player window, radio, EQ, and a sleep timer.",
+  "description": "Bedside radio for Chrome. Notes on stations, sleep timer, and white noise. Click the icon for a compact player window.",
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",

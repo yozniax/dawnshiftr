@@ -9,35 +9,63 @@
   </head>
   <body>
     <div id="app">
-      <div class="player">
-        <div class="row">
-          <div class="brand">B R O A M P</div>
-          <div class="badge">[<em id="source-label">Radio</em>]</div>
+      <header class="top">
+        <div class="brand">broamp</div>
+        <div class="top-meta">
+          <span id="source-label">Radio</span>
+          <div class="theme-dots" id="theme-dots"></div>
         </div>
-        <div class="now">
-          <span class="glyph" id="glyph">♫</span>
-          <span class="title" id="track-title">Stopped</span>
-        </div>
-        <div class="status-line" id="status-line">00:00 / 00:00 ■ Stopped</div>
-        <div class="sleep" id="sleep-line"></div>
-        <div class="stream-bar live" id="stream-bar" title="Seek">
-          <div class="fill" id="stream-fill"></div>
-        </div>
-        <div class="vis-wrap"><canvas id="viz"></canvas></div>
-        <div class="meta">
-          <div class="eq-line" id="eq-line"></div>
-          <div class="vol" id="vol-line"></div>
-          <div class="src-line" id="src-line"></div>
-        </div>
-        <div class="playlist-head" id="playlist-head"></div>
-        <div class="list" id="list"></div>
-        <div class="help" id="help"></div>
-      </div>
+      </header>
 
-      <div class="overlay" id="overlay"></div>
-      <div class="toast" id="toast"></div>
-      <input id="file-input" type="file" accept="audio/*,.m3u,.m3u8,.pls" multiple hidden />
+      <section class="now-card">
+        <p class="kicker" id="now-kicker">停止中</p>
+        <h1 class="now-title" id="track-title">局を選んでください</h1>
+        <p class="now-note" id="now-note"></p>
+        <canvas id="viz" aria-hidden="true"></canvas>
+        <div class="transport">
+          <button type="button" class="icon-btn" id="btn-prev" title="前の局">‹</button>
+          <button type="button" class="play-btn" id="btn-play" title="再生 / 一時停止">▶</button>
+          <button type="button" class="icon-btn" id="btn-next" title="次の局">›</button>
+          <label class="vol">
+            <span>音量</span>
+            <input id="vol-slider" type="range" min="0" max="100" value="80" />
+          </label>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="row-label">
+          <span id="sleep-label">スリープ</span>
+          <span class="hint">終了15秒前からフェード</span>
+        </div>
+        <div class="chips" id="sleep-line"></div>
+        <div class="row-label">
+          <span>ノイズ</span>
+          <span class="hint">周波数の違うホワイトノイズ</span>
+        </div>
+        <div class="chips" id="noise-line"></div>
+        <div class="tone" id="tone-line"></div>
+      </section>
+
+      <section class="stations">
+        <div class="station-toolbar">
+          <input id="station-filter" type="search" placeholder="局名やメモで絞り込み" />
+          <div class="toolbar-btns">
+            <button type="button" data-act="radio">選局</button>
+            <button type="button" data-act="country">国</button>
+            <button type="button" data-act="fav">★</button>
+            <button type="button" data-act="notes">メモ</button>
+            <button type="button" data-act="url">URL</button>
+            <button type="button" data-act="file">ファイル</button>
+          </div>
+        </div>
+        <div class="list" id="list"></div>
+      </section>
     </div>
+
+    <div class="overlay" id="overlay"></div>
+    <div class="toast" id="toast"></div>
+    <input id="file-input" type="file" accept="audio/*,.m3u,.m3u8,.pls" multiple hidden />
     <script type="module" src="js/player.js"></script>
   </body>
 </html>

@@ -9,59 +9,67 @@
     <style>
       body { overflow: auto; }
       .page {
-        max-width: 760px;
+        max-width: 720px;
         margin: 0 auto;
         padding: 28px 18px 64px;
-        position: relative;
-        z-index: 1;
       }
       h1 {
-        font-size: 22px;
-        letter-spacing: 0.28em;
+        font-size: 28px;
+        letter-spacing: 0.02em;
         color: var(--accent);
-        font-weight: 600;
+        font-weight: 700;
+        margin: 0 0 8px;
       }
       .tag {
-        color: var(--fg);
+        color: var(--muted);
         margin: 0 0 22px;
       }
       a { color: var(--accent); }
       pre, code {
-        font-family: inherit;
-        background: color-mix(in srgb, var(--accent) 8%, transparent);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        background: color-mix(in srgb, var(--accent) 10%, transparent);
       }
       pre {
         padding: 12px 14px;
         overflow: auto;
-        border: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+        border: 1px solid var(--line);
+        border-radius: 12px;
       }
-      ol { color: var(--bright-fg); padding-left: 1.2em; }
+      ol { color: var(--text); padding-left: 1.2em; }
       li { margin: 8px 0; }
       .cta {
         display: inline-block;
         margin: 8px 8px 18px 0;
         padding: 8px 14px;
+        border-radius: 999px;
         border: 1px solid var(--accent);
         color: var(--bg);
         background: var(--accent);
         text-decoration: none;
-        font-weight: 600;
+        font-weight: 650;
       }
       .cta.ghost {
         background: transparent;
         color: var(--accent);
       }
       section { margin: 28px 0; }
+      h2 {
+        color: var(--accent);
+        font-size: 13px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
     </style>
   </head>
   <body>
     <div class="page">
-      <h1>B R O A M P</h1>
-      <p class="tag">Winamp-style terminal player for Chrome. アイコンをクリックして小さなウィンドウで操作。</p>
+      <h1>broamp</h1>
+      <p class="tag">メモ付きのベッドサイド・ラジオ。スリープとホワイトノイズ付き。</p>
       <a class="cta" href="player.html">プレイヤーを開く</a>
+      <a class="cta ghost" href="#install">拡張の入れ方</a>
 
-      <section>
-        <h2 style="color: var(--accent); font-size: 14px; letter-spacing: 0.12em;">INSTALL EXTENSION</h2>
+      <section id="install">
+        <h2>Install</h2>
         <ol>
           <li>Chrome で <code>chrome://extensions</code> を開く</li>
           <li>右上の「デベロッパーモード」をオン</li>
@@ -69,24 +77,22 @@
           <li>このリポジトリのフォルダを選択する</li>
           <li>ツールバーのアイコンをクリックして小さなプレイヤーウィンドウを開く</li>
         </ol>
-        <p class="tag">右クリックからタブ / サイドパネルも開けます。再生はオフスクリーンで続くので、ウィンドウを閉じても止まりません。SLEEP に分数をセットすると終了時に自動停止し、残り 1 分から音量を下げ、最後に女性の声で「OK」と鳴ります。</p>
+        <p class="tag">再生はオフスクリーンで続くので、ウィンドウを閉じても止まりません。各局にメモを残せます。スリープは残り約 15 秒でフェードし、英語の声で The time is up. と知らせます。</p>
       </section>
 
       <section>
-        <h2 style="color: var(--accent); font-size: 14px; letter-spacing: 0.12em;">FEATURES</h2>
-        <pre>playlist · 10-band EQ · visualizers · Radio Browser
-featured SomaFM / Nightride · local files · stream URLs
-themes (21) · favorites · history · lyrics (lrclib)
-sleep timer · keyboard-first TUI · media keys</pre>
+        <h2>Features</h2>
+        <pre>station notes · Radio Browser · country browse
+sleep timer (15s fade + voice cue) · white noise (low / mid / high)
+bass / mid / treble · favorites · local files · stream URLs</pre>
       </section>
 
       <section>
-        <h2 style="color: var(--accent); font-size: 14px; letter-spacing: 0.12em;">KEYS</h2>
-        <pre>Space  play/pause     R  radio search     t  theme
-Enter  play cursor    N  by country       v  visualizer
-f      favorite       u  load URL         e  EQ preset
-z / r  shuffle/repeat o  local files      S  sleep timer
-?      keymap</pre>
+        <h2>Keys</h2>
+        <pre>Space  play/pause     m  station note     S  sleep
+Enter  play cursor    M  noted stations   w  white noise
+R      radio search   N  by country       f  favorite
+?      shortcuts</pre>
       </section>
     </div>
   </body>

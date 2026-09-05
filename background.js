@@ -48,8 +48,8 @@ async function openPlayerWindow() {
   const win = await chrome.windows.create({
     url: chrome.runtime.getURL(PLAYER_URL),
     type: "popup",
-    width: 400,
-    height: 640,
+    width: 428,
+    height: 760,
     focused: true,
   });
   playerWindowId = win?.id ?? null;

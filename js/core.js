@@ -1,11 +1,42 @@
 import { AudioEngine } from "./audio-engine.js";
-import { EQ_PRESETS, clampGain, nextPreset } from "./eq.js";
+import { clampTone, TONE_DEFAULT } from "./eq.js";
 import { featuredTracks, resolveClick, unwrapStreamUrl } from "./radio.js";
-import { VIS_MODES } from "./visualizer.js";
 import { THEME_NAMES } from "./themes.js";
 import { loadPersisted, savePersisted } from "./storage.js";
 
 export const SLEEP_PRESETS = [60, 55, 30, 25, 10, 5, 3, 1];
+export const FADE_MS = 15_000;
+export const NOISE_PRESETS = [
+  { id: "low", label: "低域", title: "ホワイトノイズ · 低域" },
+  { id: "mid", label: "中域", title: "ホワイトノイズ · 中域" },
+  { id: "high", label: "高域", title: "ホワイトノイズ · 高域" },
+];
+
+export function trackKey(t) {
+  return t?.id || t?.url || "";
+}
+
+function seededNotes(playlist) {
+  const seeds = [
+    [0, "夜作業向け。テンポが安定して、ボーカルが少ない"],
+    [3, "寝る前。空間が広く、変化が少ない"],
+    [6, "集中用のドローン。声はほぼ入らない"],
+  ];
+  const notes = {};
+  for (const [i, text] of seeds) {
+    const t = playlist[i];
+    if (!t) continue;
+    notes[trackKey(t)] = {
+      text,
+      title: t.title,
+      url: t.url,
+      id: t.id,
+      kind: t.kind || "radio",
+      updatedAt: 1,
+    };
+  }
+  return notes;
+}
 
 export function defaultState() {
   const playlist = featuredTracks();
@@ -18,33 +49,22 @@ export function defaultState() {
     currentTime: 0,
     duration: 0,
     live: true,
-    volumeDb: 0,
-    speed: 1,
-    shuffle: false,
-    repeat: "off",
-    eqPreset: "Rock",
-    eqGains: [...EQ_PRESETS.Rock],
-    eqBand: 0,
-    theme: "hackerman",
-    visualizer: "spectrum",
-    focus: "playlist",
+    volume: 80,
+    tone: { ...TONE_DEFAULT },
+    theme: "lamp",
     favorites: [],
-    history: [],
+    notes: seededNotes(playlist),
     error: "",
     nowPlaying: "",
-    helpBar: true,
     sleepMinutes: null,
     sleepEndsAt: null,
     sleepRemainingMs: 0,
+    noiseId: null,
   };
 }
 
 export function isExtension() {
   return typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
-}
-
-function trackKey(t) {
-  return t?.id || t?.url || "";
 }
 
 export class PlayerCore {
@@ -99,24 +119,16 @@ export class PlayerCore {
   async hydrate() {
     const saved = await loadPersisted();
     if (saved.theme && THEME_NAMES.includes(saved.theme)) this.state.theme = saved.theme;
-    if (saved.visualizer && VIS_MODES.includes(saved.visualizer)) {
-      this.state.visualizer = saved.visualizer;
+    if (saved.tone && typeof saved.tone === "object") {
+      this.state.tone = {
+        bass: clampTone(saved.tone.bass),
+        mid: clampTone(saved.tone.mid),
+        treble: clampTone(saved.tone.treble),
+      };
     }
-    if (saved.eqPreset && EQ_PRESETS[saved.eqPreset]) {
-      this.state.eqPreset = saved.eqPreset;
-      this.state.eqGains = [...EQ_PRESETS[saved.eqPreset]];
-    }
-    if (Array.isArray(saved.eqGains) && saved.eqGains.length === 10) {
-      this.state.eqGains = saved.eqGains.map(clampGain);
-      if (saved.eqPreset === "Custom") this.state.eqPreset = "Custom";
-    }
-    if (typeof saved.volumeDb === "number") this.state.volumeDb = saved.volumeDb;
-    if (typeof saved.speed === "number") this.state.speed = saved.speed;
-    if (typeof saved.shuffle === "boolean") this.state.shuffle = saved.shuffle;
-    if (saved.repeat) this.state.repeat = saved.repeat;
+    if (typeof saved.volume === "number") this.state.volume = Math.max(0, Math.min(100, saved.volume));
     if (Array.isArray(saved.favorites)) this.state.favorites = saved.favorites;
-    if (Array.isArray(saved.history)) this.state.history = saved.history;
-    if (typeof saved.helpBar === "boolean") this.state.helpBar = saved.helpBar;
+    if (saved.notes && typeof saved.notes === "object") this.state.notes = saved.notes;
     if (typeof saved.sleepEndsAt === "number" && saved.sleepEndsAt > Date.now()) {
       this.state.sleepEndsAt = saved.sleepEndsAt;
       this.state.sleepMinutes = saved.sleepMinutes ?? null;
@@ -136,16 +148,10 @@ export class PlayerCore {
     const s = this.state;
     return savePersisted({
       theme: s.theme,
-      visualizer: s.visualizer,
-      eqPreset: s.eqPreset,
-      eqGains: s.eqGains,
-      volumeDb: s.volumeDb,
-      speed: s.speed,
-      shuffle: s.shuffle,
-      repeat: s.repeat,
+      tone: s.tone,
+      volume: s.volume,
       favorites: s.favorites,
-      history: s.history,
-      helpBar: s.helpBar,
+      notes: s.notes,
       sleepEndsAt: s.sleepEndsAt,
       sleepMinutes: s.sleepMinutes,
       playlist: s.playlist.map(({ blob, file, _blobUrl, ...rest }) => rest),
@@ -154,9 +160,8 @@ export class PlayerCore {
   }
 
   applyAudioSettings() {
-    this.engine.setEq(this.state.eqGains);
+    this.engine.setTone(this.state.tone);
     this.applyVolume();
-    this.engine.setSpeed(this.state.speed);
   }
 
   sleepRemaining() {
@@ -167,12 +172,12 @@ export class PlayerCore {
   fadeAmount() {
     const remaining = this.sleepRemaining();
     if (remaining == null) return 1;
-    if (remaining >= 60_000) return 1;
-    return remaining / 60_000;
+    if (remaining >= FADE_MS) return 1;
+    return remaining / FADE_MS;
   }
 
   applyVolume() {
-    this.engine.setVolumeDb(this.state.volumeDb, this.fadeAmount());
+    this.engine.setGain((this.state.volume / 100) * this.fadeAmount());
   }
 
   startSleepLoop() {
@@ -239,7 +244,7 @@ export class PlayerCore {
     this.applyVolume();
     this.persist();
     this.broadcast();
-    void this.engine.playGong();
+    void this.engine.playCue();
   }
 
   armSleepAlarm() {
@@ -261,15 +266,81 @@ export class PlayerCore {
     return this.state.playlist[this.state.index] || null;
   }
 
+  noteFor(track) {
+    const key = trackKey(track);
+    return key ? this.state.notes[key] || null : null;
+  }
+
+  setStationNote(track, text) {
+    if (!track) return;
+    const key = trackKey(track);
+    if (!key) return;
+    const trimmed = String(text || "").trim();
+    const next = { ...this.state.notes };
+    if (!trimmed) delete next[key];
+    else {
+      next[key] = {
+        text: trimmed,
+        title: track.title || next[key]?.title || key,
+        url: track.url || next[key]?.url || "",
+        id: track.id || key,
+        kind: track.kind || "radio",
+        updatedAt: Date.now(),
+      };
+    }
+    this.state.notes = next;
+    this.persist();
+    this.broadcast();
+  }
+
+  notedStations() {
+    return Object.values(this.state.notes)
+      .filter((n) => n?.url)
+      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+      .map((n) => ({
+        id: n.id,
+        title: n.title,
+        url: n.url,
+        kind: n.kind || "radio",
+      }));
+  }
+
+  loadNotedStations() {
+    const tracks = this.notedStations();
+    if (!tracks.length) return;
+    return this.setPlaylist(tracks);
+  }
+
+  async playNoise(id) {
+    const preset = NOISE_PRESETS.find((p) => p.id === id);
+    if (!preset) return;
+    if (this.state.noiseId === id && this.state.status === "playing") {
+      this.stop();
+      return;
+    }
+    this.state.noiseId = id;
+    this.state.nowPlaying = preset.title;
+    this.state.error = "";
+    this.state.live = true;
+    this.state.duration = 0;
+    this.state.currentTime = 0;
+    this._loadedUrl = `noise:${id}`;
+    await this.engine.playNoise(id);
+    this.applyAudioSettings();
+    this.state.playing = true;
+    this.state.status = "playing";
+    this.broadcast();
+  }
+
   async playIndex(i, { autoplay = true, autoSkip = false } = {}) {
     if (!this.state.playlist.length) return;
     if (!autoSkip) this._skips = 0;
+    this.state.noiseId = null;
     this.state.index = ((i % this.state.playlist.length) + this.state.playlist.length) % this.state.playlist.length;
     this.state.cursor = this.state.index;
     const track = this.current();
     this.state.nowPlaying = track.title;
     this.state.error = "";
-    this.pushHistory(track);
     let url = track.url;
     if (track.file instanceof Blob) {
       if (track._blobUrl) URL.revokeObjectURL(track._blobUrl);
@@ -305,6 +376,18 @@ export class PlayerCore {
       this.broadcast();
       return;
     }
+    if (this.state.noiseId) {
+      try {
+        await this.engine.playNoise(this.state.noiseId);
+        this.state.playing = true;
+        this.state.status = "playing";
+      } catch (err) {
+        this.state.error = err.message || "play failed";
+        this.state.status = "error";
+      }
+      this.broadcast();
+      return;
+    }
     if (this._loadedUrl) {
       try {
         await this.engine.play();
@@ -320,83 +403,38 @@ export class PlayerCore {
 
   stop() {
     this.engine.stop();
+    this.state.noiseId = null;
     this.state.playing = false;
     this.state.status = "stopped";
     this.broadcast();
   }
 
-  async next({ fromEnded = false, autoSkip = false } = {}) {
+  async next({ autoSkip = false } = {}) {
     const n = this.state.playlist.length;
     if (!n) return;
-    if (this.state.repeat === "one" && fromEnded) {
-      await this.playIndex(this.state.index, { autoSkip });
-      return;
-    }
-    if (this.state.shuffle) {
-      let i = this.state.index;
-      if (n > 1) {
-        while (i === this.state.index) i = Math.floor(Math.random() * n);
-      }
-      await this.playIndex(i, { autoSkip });
-      return;
-    }
-    const next = this.state.index + 1;
-    if (next >= n) {
-      if (this.state.repeat === "all" || !fromEnded) await this.playIndex(0, { autoSkip });
-      else this.stop();
-      return;
-    }
-    await this.playIndex(next, { autoSkip });
+    await this.playIndex((this.state.index + 1) % n, { autoSkip });
   }
 
   async prev() {
-    if (this.state.currentTime > 3 && !this.state.live) {
-      this.engine.seek(0);
-      return;
-    }
     const n = this.state.playlist.length;
     if (!n) return;
     await this.playIndex((this.state.index - 1 + n) % n);
   }
 
-  seekBy(delta) {
-    if (this.state.live) return;
-    this.engine.seek(this.state.currentTime + delta);
-  }
-
-  setVolumeDb(db) {
-    this.state.volumeDb = Math.max(-30, Math.min(6, db));
+  setVolume(n) {
+    this.state.volume = Math.max(0, Math.min(100, Math.round(Number(n) || 0)));
     this.applyVolume();
     this.broadcast();
     this.persist();
   }
 
-  setSpeed(rate) {
-    this.state.speed = Math.max(0.25, Math.min(2, Math.round(rate * 4) / 4));
-    this.engine.setSpeed(this.state.speed);
-    this.broadcast();
-    this.persist();
-  }
-
-  setEqPreset(name) {
-    if (!EQ_PRESETS[name]) return;
-    this.state.eqPreset = name;
-    this.state.eqGains = [...EQ_PRESETS[name]];
-    this.engine.setEq(this.state.eqGains);
-    this.broadcast();
-    this.persist();
-  }
-
-  cycleEq() {
-    this.setEqPreset(nextPreset(this.state.eqPreset === "Custom" ? "Flat" : this.state.eqPreset));
-  }
-
-  nudgeBand(dir) {
-    const i = this.state.eqBand;
-    const next = clampGain((this.state.eqGains[i] || 0) + dir);
-    this.state.eqGains = this.state.eqGains.map((g, idx) => (idx === i ? next : g));
-    this.state.eqPreset = "Custom";
-    this.engine.setEq(this.state.eqGains);
+  setTone(partial) {
+    this.state.tone = {
+      bass: clampTone(partial.bass ?? this.state.tone.bass),
+      mid: clampTone(partial.mid ?? this.state.tone.mid),
+      treble: clampTone(partial.treble ?? this.state.tone.treble),
+    };
+    this.engine.setTone(this.state.tone);
     this.broadcast();
     this.persist();
   }
@@ -439,33 +477,6 @@ export class PlayerCore {
     if (playing) this.playIndex(this.state.index);
   }
 
-  moveTrack(from, to) {
-    if (to < 0 || to >= this.state.playlist.length) return;
-    const list = [...this.state.playlist];
-    const [item] = list.splice(from, 1);
-    list.splice(to, 0, item);
-    this.state.playlist = list;
-    if (this.state.index === from) this.state.index = to;
-    else if (from < this.state.index && to >= this.state.index) this.state.index -= 1;
-    else if (from > this.state.index && to <= this.state.index) this.state.index += 1;
-    this.state.cursor = to;
-    this.broadcast();
-    this.persist();
-  }
-
-  toggleShuffle() {
-    this.state.shuffle = !this.state.shuffle;
-    this.broadcast();
-    this.persist();
-  }
-
-  cycleRepeat() {
-    const order = ["off", "all", "one"];
-    this.state.repeat = order[(order.indexOf(this.state.repeat) + 1) % order.length];
-    this.broadcast();
-    this.persist();
-  }
-
   toggleFavorite(track = this.state.playlist[this.state.cursor]) {
     if (!track) return;
     const key = trackKey(track);
@@ -483,19 +494,9 @@ export class PlayerCore {
     return this.state.favorites.some((f) => trackKey(f) === key);
   }
 
-  pushHistory(track) {
-    const entry = { ...track, playedAt: Date.now() };
-    this.state.history = [entry, ...this.state.history.filter((h) => trackKey(h) !== trackKey(track))].slice(0, 80);
-  }
-
   loadFavorites() {
     if (!this.state.favorites.length) return;
     return this.setPlaylist(this.state.favorites.map((t) => ({ ...t })));
-  }
-
-  loadHistory() {
-    if (!this.state.history.length) return;
-    return this.setPlaylist(this.state.history.map((t) => ({ ...t })));
   }
 
   setTheme(name) {
@@ -507,29 +508,6 @@ export class PlayerCore {
   cycleTheme() {
     const i = THEME_NAMES.indexOf(this.state.theme);
     this.setTheme(THEME_NAMES[(i + 1) % THEME_NAMES.length]);
-  }
-
-  setVisualizer(name) {
-    this.state.visualizer = name;
-    this.broadcast();
-    this.persist();
-  }
-
-  cycleVisualizer() {
-    const i = VIS_MODES.indexOf(this.state.visualizer);
-    this.setVisualizer(VIS_MODES[(i + 1) % VIS_MODES.length]);
-  }
-
-  cycleFocus() {
-    const order = ["playlist", "eq", "volume", "speed"];
-    this.state.focus = order[(order.indexOf(this.state.focus) + 1) % order.length];
-    this.broadcast();
-  }
-
-  toggleHelpBar() {
-    this.state.helpBar = this.state.helpBar === false;
-    this.broadcast();
-    this.persist();
   }
 
   getAnalyser() {
