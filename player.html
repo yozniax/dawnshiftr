@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>DAWNSHIFTr</title>
+    <title>DAWNSHIFTR by DoYoBe</title>
     <link rel="icon" href="icons/icon32.png?v=dawn" />
     <link rel="stylesheet" href="css/player.css" />
   </head>
   <body>
     <div id="app">
       <header class="top">
-        <div class="brand"><span class="dawn">DAWN</span>SHIFT<span class="r">r</span></div>
+        <div class="brand"><span class="dawn">DAWN</span>SHIFT<span class="tail">R</span><span class="by">by DoYoBe</span></div>
         <div class="top-right">
           <span id="now-kicker">STOPPED</span>
           <button type="button" class="help-btn" id="btn-help" title="Shortcuts" aria-label="Shortcuts">ℹ</button>
@@ -20,8 +20,8 @@
       <section class="now-card">
         <div class="now-copy">
           <h1 class="now-title" id="track-title">PICK A STATION</h1>
-          <p class="song empty" id="song-title">&nbsp;</p>
-          <p class="now-note empty" id="now-note">&nbsp;</p>
+          <div class="song-slot"><span id="song-title"></span></div>
+          <div class="note-slot"><span id="now-note"></span></div>
         </div>
         <div class="transport">
           <button type="button" class="icon-btn" id="btn-prev" title="Previous">‹</button>

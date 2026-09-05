@@ -240,15 +240,10 @@ function renderChrome(state) {
   kicker.classList.toggle("on-air", state.status === "playing" && state.live);
   document.getElementById("track-title").textContent = track?.title || "PICK A STATION";
   const song = document.getElementById("song-title");
-  const title = String(state.songTitle || "").trim();
-  song.hidden = false;
-  song.textContent = title || "\u00a0";
-  song.classList.toggle("empty", !title);
-  const note = noteText(track);
+  song.textContent = String(state.songTitle || "").trim();
   const noteEl = document.getElementById("now-note");
-  noteEl.hidden = false;
-  noteEl.textContent = note || "\u00a0";
-  noteEl.classList.toggle("empty", !note);
+  const note = noteText(track);
+  noteEl.textContent = note;
   document.getElementById("btn-play").textContent = state.status === "playing" ? "❚❚" : "▶";
   const vol = document.getElementById("vol-slider");
   if (document.activeElement !== vol) vol.value = String(state.volume ?? 80);
@@ -413,10 +408,35 @@ function stationRow(t, i, { history = false } = {}) {
   </div>`;
 }
 
+let ignoreActivateUntil = 0;
+function holdPlay() {
+  ignoreActivateUntil = performance.now() + 500;
+}
+
+listEl.addEventListener(
+  "pointerdown",
+  (e) => {
+    if (e.target.closest("[data-row-act],.track-side")) holdPlay();
+  },
+  true
+);
+listEl.addEventListener(
+  "click",
+  (e) => {
+    if (e.target.closest("[data-row-act],.track-side")) return;
+    if (performance.now() < ignoreActivateUntil) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  },
+  true
+);
+
 function bindStationRows(tracks, { history = false } = {}) {
   listEl.querySelectorAll(".track").forEach((el) => {
     el.addEventListener("click", (e) => {
-      if (e.target.closest("[data-row-act],[data-hide],[data-fav],[data-memo]")) return;
+      if (performance.now() < ignoreActivateUntil) return;
+      if (e.target.closest("[data-row-act],[data-hide],[data-fav],[data-memo],.track-side")) return;
       const i = Number(el.dataset.i);
       const track = tracks[i];
       if (!track) return;
@@ -427,7 +447,9 @@ function bindStationRows(tracks, { history = false } = {}) {
   });
   listEl.querySelectorAll("[data-row-act]").forEach((btn) => {
     btn.addEventListener("click", async (e) => {
+      e.preventDefault();
       e.stopPropagation();
+      holdPlay();
       const i = Number(btn.closest(".track")?.dataset.i);
       const track = tracks[i];
       if (!track) return;
@@ -455,7 +477,9 @@ function bindStationRows(tracks, { history = false } = {}) {
   });
   listEl.querySelectorAll("[data-hide]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
+      e.preventDefault();
       e.stopPropagation();
+      holdPlay();
       client.command("hideStation", Number(btn.dataset.hide));
     });
   });

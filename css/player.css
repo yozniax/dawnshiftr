@@ -61,14 +61,23 @@ button, input, textarea {
   color: var(--text);
   font-size: 13px;
   letter-spacing: 0.06em;
-  text-transform: none;
+  text-transform: uppercase;
+  display: flex;
+  align-items: baseline;
+  gap: 0;
+  min-width: 0;
 }
 
-.brand .dawn { color: var(--accent); }
+.brand .dawn,
+.brand .tail { color: var(--accent); }
 
-.brand .r {
-  color: var(--text);
-  font-weight: 700;
+.brand .by {
+  margin-left: 8px;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  color: #8a8a8a;
+  text-transform: uppercase;
 }
 
 .top-right {
@@ -117,9 +126,9 @@ button, input, textarea {
 
 .now-copy {
   display: grid;
-  grid-template-rows: 19px 16px 14px;
-  row-gap: 2px;
-  min-height: 55px;
+  grid-template-rows: 19px 18px 14px;
+  height: 51px;
+  overflow: hidden;
 }
 
 .now-title {
@@ -134,36 +143,35 @@ button, input, textarea {
   text-overflow: ellipsis;
 }
 
-.song {
-  margin: 0;
-  color: var(--accent);
-  font-size: 12px;
-  height: 16px;
-  line-height: 16px;
-  white-space: nowrap;
+.song-slot,
+.note-slot {
   overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
 }
 
-.song.empty {
-  visibility: hidden;
+.song-slot {
+  height: 18px;
+  color: var(--accent);
+  font-size: 12px;
+  line-height: 18px;
 }
 
-.now-note {
-  margin: 0;
+.song-slot span,
+.note-slot span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  height: 100%;
+}
+
+.note-slot {
   height: 14px;
   color: var(--muted);
   font-size: 11px;
   line-height: 14px;
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.now-note.empty {
-  visibility: hidden;
-  pointer-events: none;
 }
 
 .eq-vis {

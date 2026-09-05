@@ -92,8 +92,8 @@ export class AudioEngine {
     this.source = this.ctx.createMediaElementSource(this.audio);
     this.gainNode = this.ctx.createGain();
     this.analyser = this.ctx.createAnalyser();
-    this.analyser.fftSize = 512;
-    this.analyser.smoothingTimeConstant = 0.72;
+    this.analyser.fftSize = 1024;
+    this.analyser.smoothingTimeConstant = 0.45;
     this._freq = new Uint8Array(this.analyser.frequencyBinCount);
     this.source.connect(this.gainNode);
     this.gainNode.connect(this.ctx.destination);
@@ -104,14 +104,22 @@ export class AudioEngine {
   getSpectrum(bars = 9) {
     const out = new Array(bars).fill(0);
     if (!this.analyser || !this._freq) return out;
+    if (this._freq.length !== this.analyser.frequencyBinCount) {
+      this._freq = new Uint8Array(this.analyser.frequencyBinCount);
+    }
     this.analyser.getByteFrequencyData(this._freq);
     const n = this._freq.length;
+    const usable = Math.max(bars * 2, Math.floor(n * 0.58));
     for (let i = 0; i < bars; i++) {
-      const lo = Math.floor((i / bars) ** 1.7 * n);
-      const hi = Math.max(lo + 1, Math.floor(((i + 1) / bars) ** 1.7 * n));
-      let sum = 0;
-      for (let j = lo; j < hi && j < n; j++) sum += this._freq[j];
-      out[i] = sum / ((hi - lo) * 255);
+      const t0 = i / bars;
+      const t1 = (i + 1) / bars;
+      const lo = Math.floor(t0 ** 1.25 * usable);
+      const hi = Math.max(lo + 3, Math.floor(t1 ** 1.25 * usable));
+      let peak = 0;
+      for (let j = lo; j < hi && j < n; j++) {
+        if (this._freq[j] > peak) peak = this._freq[j];
+      }
+      out[i] = peak / 255;
     }
     return out;
   }
