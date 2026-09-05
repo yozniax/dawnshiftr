@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mergeTracks, toggleFavoriteList, trackHaystack, trackKey, tracksForPane, scrollChildIntoContainer, trackAtCursor } from "../js/tracks.js";
+import { mergeTracks, toggleFavoriteList, trackHaystack, trackKey, tracksForPane, scrollChildIntoContainer, trackAtCursor, stepCursor } from "../js/tracks.js";
 
 test("trackKey prefers id", () => {
   assert.equal(trackKey({ id: "a", url: "http://x" }), "a");
@@ -57,6 +57,14 @@ test("scrollChildIntoContainer keeps a sticky heading gutter", () => {
   const row = { getBoundingClientRect: () => ({ top: 210, bottom: 250 }) };
   scrollChildIntoContainer(container, row, 28);
   assert.equal(container.scrollTop, 82);
+});
+
+test("stepCursor stays on the list", () => {
+  assert.equal(stepCursor(50, 0, 10), 10);
+  assert.equal(stepCursor(50, 10, -4), 6);
+  assert.equal(stepCursor(50, 0, -1), 0);
+  assert.equal(stepCursor(50, 49, 1), 49);
+  assert.equal(stepCursor(0, 3, 1), 0);
 });
 
 test("trackAtCursor prefers the highlighted row key over index", () => {

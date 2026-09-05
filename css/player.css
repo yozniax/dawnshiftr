@@ -364,6 +364,7 @@ a.help-btn {
   outline: none;
   position: relative;
   scroll-padding-top: 28px;
+  overscroll-behavior: contain;
 }
 
 .list-heading {

@@ -3,7 +3,7 @@ import { searchStations, stationsByCountry, popularStations, POPULAR_HEADING, PO
 import { attachEqVis } from "./eq-vis.js";
 import { isEnabled, setEnabled } from "./telemetry.js";
 import { sleepClock, isPomodoro } from "./sleep.js";
-import { mergeTracks, trackHaystack as haystackOf, tracksForPane, scrollChildIntoContainer, trackAtCursor } from "./tracks.js";
+import { mergeTracks, trackHaystack as haystackOf, tracksForPane, scrollChildIntoContainer, stepCursor } from "./tracks.js";
 
 class ExtensionBridge {
   constructor() {
@@ -303,8 +303,8 @@ function highlightPlayingKeys(state) {
   const on = isOnAir(state);
   listEl.querySelectorAll(".track").forEach((el) => {
     el.classList.toggle("is-playing", on && el.dataset.key === key);
-    el.classList.toggle("is-cursor", Number(el.dataset.i) === browseCursor);
   });
+  syncCursor();
 }
 
 function paintList(sig, html, after) {
@@ -443,9 +443,13 @@ listEl.addEventListener(
   },
   true
 );
-listEl.addEventListener("keydown", (e) => {
-  if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
-});
+listEl.addEventListener(
+  "keydown",
+  (e) => {
+    if (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Enter" || e.key === " ") e.preventDefault();
+  },
+  true
+);
 
 function bindStationRows(tracks, { history = false } = {}) {
   listEl.querySelectorAll(".track").forEach((el) => {
@@ -718,23 +722,26 @@ function visibleTracks() {
 }
 
 function highlightedTrack() {
-  return trackAtCursor(visibleTracks(), browseCursor, listEl.querySelector(".track.is-cursor"));
+  return visibleTracks()[browseCursor] || null;
 }
 
 function cursorGutter() {
   return listEl.querySelector(".list-heading")?.offsetHeight || 0;
 }
 
+function syncCursor() {
+  const rows = [...listEl.querySelectorAll(".track")];
+  if (!rows.length) return null;
+  browseCursor = stepCursor(rows.length, browseCursor, 0);
+  rows.forEach((el) => el.classList.toggle("is-cursor", Number(el.dataset.i) === browseCursor));
+  return rows.find((el) => Number(el.dataset.i) === browseCursor) || rows[browseCursor] || null;
+}
+
 function moveBrowse(delta) {
   const rows = [...listEl.querySelectorAll(".track")];
   if (!rows.length) return;
-  let idx = rows.findIndex((el) => el.classList.contains("is-cursor"));
-  if (idx < 0) idx = rows.findIndex((el) => Number(el.dataset.i) === browseCursor);
-  if (idx < 0) idx = 0;
-  idx = Math.max(0, Math.min(rows.length - 1, idx + delta));
-  browseCursor = Number(rows[idx].dataset.i);
-  rows.forEach((el, i) => el.classList.toggle("is-cursor", i === idx));
-  scrollChildIntoContainer(listEl, rows[idx], cursorGutter());
+  browseCursor = stepCursor(rows.length, browseCursor, delta);
+  scrollChildIntoContainer(listEl, syncCursor(), cursorGutter());
 }
 
 function moveCursor(delta) {
@@ -864,6 +871,15 @@ document.getElementById("btn-help").addEventListener("click", () => openOverlay(
 overlayEl.addEventListener("click", (e) => {
   if (overlayEl.classList.contains("modal") && e.target === overlayEl) closeOverlay();
 });
+
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if (overlay || typingInField()) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") e.preventDefault();
+  },
+  true
+);
 
 document.addEventListener("keydown", async (e) => {
   if (overlay) {

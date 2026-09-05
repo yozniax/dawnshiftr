@@ -47,6 +47,11 @@ export function scrollChildIntoContainer(container, child, gutterTop = 0) {
   else if (row.bottom > box.bottom) container.scrollTop += row.bottom - box.bottom;
 }
 
+export function stepCursor(count, cursor, delta) {
+  if (!count) return 0;
+  return Math.max(0, Math.min(count - 1, (Number(cursor) || 0) + (Number(delta) || 0)));
+}
+
 export function trackAtCursor(tracks, cursor, row) {
   const list = tracks || [];
   if (row?.dataset?.key) {
