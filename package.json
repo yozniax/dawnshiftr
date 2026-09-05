@@ -6,6 +6,7 @@
   "description": "DAWNSHIFTr — compact bedside radio with notes and a sleep timer",
   "scripts": {
     "start": "node server.mjs",
-    "preview": "node server.mjs"
+    "preview": "node server.mjs",
+    "test": "node --test test/*.test.js"
   }
 }

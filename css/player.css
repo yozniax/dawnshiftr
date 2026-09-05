@@ -351,13 +351,12 @@ a.help-btn {
 
 #pane-search:focus { border-color: var(--accent); }
 
-.list {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--muted) transparent;
-  outline: none;
+.list-heading {
+  padding: 8px 8px 4px;
+  color: var(--accent);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  font-weight: 650;
 }
 
 .track {

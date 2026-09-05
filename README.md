@@ -10,6 +10,10 @@ npm start
 
 Open `http://127.0.0.1:43187`. `/index.html` has install steps.
 
+```sh
+npm test
+```
+
 ## Chrome extension
 
 1. `chrome://extensions`
@@ -24,7 +28,8 @@ Audio keeps playing in an offscreen document if you close the window.
 - Radio Browser search (includes station notes), play history, country lists
 - Station notes
 - Hide a station with DELETE
-- Sleep timer: last ~15 seconds fade. PT (25 min) says “Your Time is up!” when it ends
+- Sleep timer: last ~15 seconds fade, except PT (25 min), which stops without fading and says “Your Time is up!”
+- STATIONS tab shows Radio Browser’s POPULAR TOP 50 until you search
 - Play the current YouTube tab from the toolbar icon
 - Live song title when the stream sends ICY metadata
 - Equalizer-style level display while playing

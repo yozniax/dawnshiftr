@@ -104,7 +104,7 @@ async function api(path) {
   throw lastError || new Error("Radio Browser unreachable");
 }
 
-function isPlayableStation(station) {
+export function isPlayableStation(station) {
   if (Number(station.hls) === 1) return false;
   const url = String(station.url_resolved || station.url || "").toLowerCase();
   if (!url) return false;
@@ -145,13 +145,21 @@ export async function searchStations({ name = "", country = "", limit = 40 } = {
   return (rows || []).filter(isPlayableStation).map((s) => toTrack(s));
 }
 
-export async function popularStations(limit = 10) {
-  const want = Math.max(1, Math.round(Number(limit) || 10));
-  const fetchN = Math.max(want * 3, 24);
+export const POPULAR_LIMIT = 50;
+export const POPULAR_HEADING = "POPULAR TOP 50";
+
+export function takePlayableStations(rows, limit = POPULAR_LIMIT) {
+  const want = Math.max(1, Math.round(Number(limit) || POPULAR_LIMIT));
+  return (rows || []).filter(isPlayableStation).map((s) => toTrack(s)).slice(0, want);
+}
+
+export async function popularStations(limit = POPULAR_LIMIT) {
+  const want = Math.max(1, Math.round(Number(limit) || POPULAR_LIMIT));
+  const fetchN = Math.max(want * 3, 150);
   try {
     const rows = await api(`/json/stations/topclick/${fetchN}?hidebroken=true`);
-    const tracks = (rows || []).filter(isPlayableStation).map((s) => toTrack(s));
-    if (tracks.length) return tracks.slice(0, want);
+    const tracks = takePlayableStations(rows, want);
+    if (tracks.length) return tracks;
   } catch {
     /* search fallback */
   }

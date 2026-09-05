@@ -4,22 +4,11 @@ import { loadPersisted, savePersisted } from "./storage.js";
 import { IcyWatcher } from "./icy.js";
 import { parseYouTubeUrl, youtubeTrack, YouTubeEngine } from "./youtube.js";
 import { startTelemetry, recordSession, recordListen, recordFav, recordFavs } from "./telemetry.js";
+import { FADE_MS, PT_MINUTES, SLEEP_PRESETS, fadeAmount as sleepFade, isPomodoro, sleepChipLabel } from "./sleep.js";
+import { toggleFavoriteList, trackKey } from "./tracks.js";
 
-export const SLEEP_PRESETS = [180, 120, 60, 55, 30, 25, 10, 5, 3, 1];
-export const FADE_MS = 15_000;
-export const PT_MINUTES = 25;
-
-export function sleepChipLabel(mins) {
-  if (mins === 180) return "3h";
-  if (mins === 120) return "2h";
-  if (mins === 60) return "1h";
-  if (mins === 25) return "PT";
-  return String(mins);
-}
-
-export function trackKey(t) {
-  return t?.id || t?.url || "";
-}
+export { FADE_MS, PT_MINUTES, SLEEP_PRESETS, sleepChipLabel };
+export { trackKey };
 
 function seededNotes(playlist) {
   const seeds = [
@@ -221,10 +210,10 @@ export class PlayerCore {
   }
 
   fadeAmount() {
-    const remaining = this.sleepRemaining();
-    if (remaining == null) return 1;
-    if (remaining >= FADE_MS) return 1;
-    return remaining / FADE_MS;
+    return sleepFade(this.sleepRemaining(), {
+      fadeMs: FADE_MS,
+      skipFade: isPomodoro(this.state.sleepMinutes),
+    });
   }
 
   applyVolume() {
@@ -682,13 +671,9 @@ export class PlayerCore {
 
   toggleFavorite(track = this.state.playlist[this.state.cursor]) {
     if (!track) return;
-    const key = trackKey(track);
-    const has = this.state.favorites.some((f) => trackKey(f) === key);
-    const { file, _blobUrl, blob, ...rest } = track;
-    this.state.favorites = has
-      ? this.state.favorites.filter((f) => trackKey(f) !== key)
-      : [rest, ...this.state.favorites];
-    void recordFav(rest, !has);
+    const { list, added, item } = toggleFavoriteList(this.state.favorites, track);
+    this.state.favorites = list;
+    if (item) void recordFav(item, added);
     void recordFavs(this.state.favorites);
     this.broadcast();
     this.persist();

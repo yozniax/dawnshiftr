@@ -1,7 +1,9 @@
-import { PlayerCore, isExtension, defaultState, SLEEP_PRESETS, FADE_MS, trackKey, sleepChipLabel } from "./core.js";
-import { searchStations, stationsByCountry, popularStations, REGIONS } from "./radio.js";
+import { PlayerCore, isExtension, defaultState, SLEEP_PRESETS, trackKey, sleepChipLabel } from "./core.js";
+import { searchStations, stationsByCountry, popularStations, POPULAR_HEADING, POPULAR_LIMIT, REGIONS } from "./radio.js";
 import { attachEqVis } from "./eq-vis.js";
 import { isEnabled, setEnabled } from "./telemetry.js";
+import { sleepClock, isPomodoro } from "./sleep.js";
+import { mergeTracks, trackHaystack as haystackOf } from "./tracks.js";
 
 class ExtensionBridge {
   constructor() {
@@ -271,25 +273,13 @@ function render(state) {
   renderPane(state);
 }
 
-function formatSleepRemain(ms) {
-  const sec = Math.max(0, Math.ceil(ms / 1000));
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
-}
-
 function updateSleepClock(state) {
-  const remaining = state.sleepEndsAt ? state.sleepRemainingMs || Math.max(0, state.sleepEndsAt - Date.now()) : 0;
-  const fading = Boolean(state.sleepEndsAt) && remaining <= FADE_MS;
+  const clock = sleepClock(state);
   const label = document.getElementById("sleep-label");
   if (!label) return;
-  if (state.sleepEndsAt) {
-    const remain = formatSleepRemain(remaining);
-    label.textContent =
-      state.sleepMinutes === 25 ? `POMODORO ENDS AT ${remain}` : `SLEEPING IN ${remain}`;
-  } else label.textContent = "SLEEP";
-  label.classList.toggle("counting", Boolean(state.sleepEndsAt));
-  label.classList.toggle("fading", fading);
+  label.textContent = clock.text;
+  label.classList.toggle("counting", clock.counting);
+  label.classList.toggle("fading", clock.fading);
 }
 
 function renderSleepChips(state) {
@@ -299,7 +289,7 @@ function renderSleepChips(state) {
   el.dataset.sig = sig;
   el.innerHTML = SLEEP_PRESETS.map((mins) => {
     const on = state.sleepMinutes === mins ? "on" : "";
-    const title = mins === 25 ? " title=\"POMODORO TECHNIQUE\"" : "";
+    const title = isPomodoro(mins) ? " title=\"POMODORO TECHNIQUE\"" : "";
     return `<button type="button" class="chip ${on}" data-sleep="${mins}"${title}>${sleepChipLabel(mins)}</button>`;
   }).join("");
 }
@@ -369,7 +359,7 @@ function renderPane(state) {
 }
 
 function trackHaystack(t) {
-  return [t.title, t.country, t.tags, noteText(t)].filter(Boolean).join(" ").toLowerCase();
+  return haystackOf(t, noteText(t));
 }
 
 function localCatalog() {
@@ -399,18 +389,6 @@ function localCatalog() {
 function isHiddenTrack(t) {
   const key = trackKey(t);
   return Boolean(key && client.state.hidden?.includes(key));
-}
-
-function mergeTracks(primary, extra) {
-  const seen = new Set(primary.map(trackKey).filter(Boolean));
-  const out = [...primary];
-  for (const t of extra) {
-    const k = trackKey(t);
-    if (!k || seen.has(k)) continue;
-    seen.add(k);
-    out.push(t);
-  }
-  return out;
 }
 
 function stationRow(t, i, { history = false } = {}) {
@@ -556,7 +534,8 @@ function renderStations() {
     listEl.innerHTML = `<div class="empty">${q ? "NOTHING HERE." : "TYPE TO SEARCH ALL STATIONS."}</div>`;
     return;
   }
-  listEl.innerHTML = tracks.map((t, i) => stationRow(t, i)).join("");
+  const heading = !q ? `<div class="list-heading">${POPULAR_HEADING}</div>` : "";
+  listEl.innerHTML = heading + tracks.map((t, i) => stationRow(t, i)).join("");
   bindStationRows(tracks);
 }
 
@@ -578,9 +557,9 @@ async function searchStationsPane(q) {
     stationsItems = [];
     if (pane === "stations") renderStations();
     try {
-      const rows = await popularStations(10);
+      const rows = await popularStations(POPULAR_LIMIT);
       if (seq !== stationsSeq) return;
-      popularItems = (rows || []).filter((t) => !isHiddenTrack(t)).slice(0, 10);
+      popularItems = (rows || []).filter((t) => !isHiddenTrack(t)).slice(0, POPULAR_LIMIT);
       stationsLoading = false;
       stationsItems = popularItems;
       stationsError = popularItems.length ? "" : "NO POPULAR STATIONS.";
