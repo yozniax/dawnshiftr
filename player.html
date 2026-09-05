@@ -10,10 +10,10 @@
   <body>
     <div id="app">
       <header class="top">
-        <div class="brand"><span class="dawn">DAWN</span>SHIFT<span class="tail">R</span><span class="by">by DoYoBe</span></div>
+        <div class="brand"><span class="dawn">DAWN</span>SHIFT<span class="tail">R</span><span class="by">by <a href="https://www.doyo.be/" target="_blank" rel="noopener noreferrer">DoYoBe</a></span></div>
         <div class="top-right">
           <span id="now-kicker">STOPPED</span>
-          <button type="button" class="help-btn" id="btn-help" title="Shortcuts" aria-label="Shortcuts">ℹ</button>
+          <button type="button" class="help-btn" id="btn-help" title="KEYBIND" aria-label="KEYBIND">ℹ</button>
         </div>
       </header>
 
@@ -24,11 +24,9 @@
           <div class="note-slot"><span id="now-note"></span></div>
         </div>
         <div class="transport">
-          <button type="button" class="icon-btn" id="btn-prev" title="Previous">‹</button>
-          <button type="button" class="play-btn" id="btn-play" title="Play / pause">▶</button>
-          <button type="button" class="icon-btn" id="btn-next" title="Next">›</button>
-          <label class="vol">
-            <input id="vol-slider" type="range" min="0" max="100" value="80" />
+          <button type="button" class="play-btn" id="btn-play" title="PLAY/PAUSE" aria-label="PLAY/PAUSE">▶</button>
+          <label class="vol" title="VOL">
+            <input id="vol-slider" type="range" min="0" max="100" value="80" title="VOL" />
           </label>
           <div class="sleep-wrap">
             <button type="button" id="sleep-label">SLEEP</button>

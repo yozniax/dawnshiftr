@@ -80,6 +80,13 @@ button, input, textarea {
   text-transform: uppercase;
 }
 
+.brand .by a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.brand .by a:hover { color: var(--accent); }
+
 .top-right {
   display: flex;
   align-items: center;
@@ -458,14 +465,10 @@ button, input, textarea {
   padding: 20px;
 }
 
-.overlay.modal .modal-card {
-  width: min(440px, 100%);
-  max-height: min(80vh, 560px);
-  overflow: auto;
-  background: var(--bg-card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 14px 16px 16px;
+.overlay.modal textarea {
+  resize: none;
+  height: 36px;
+  min-height: 36px;
 }
 
 .overlay h2 {

@@ -17,14 +17,10 @@ export function attachEqVis(canvas, getLevels, isPlaying) {
 
   function contrast(raw) {
     const slice = (raw || []).slice(0, BARS);
-    const floor = 0.06;
-    let max = 0.08;
-    for (let i = 0; i < BARS; i++) max = Math.max(max, slice[i] || 0);
     const out = new Array(BARS);
     for (let i = 0; i < BARS; i++) {
-      const lifted = Math.max(0, (slice[i] || 0) - floor);
-      const n = lifted / (max - floor);
-      out[i] = Math.pow(n, 0.55);
+      const v = Math.max(0, (slice[i] || 0) - 0.03);
+      out[i] = Math.min(1, Math.pow(v, 0.62) * 1.7);
     }
     return out;
   }
@@ -43,12 +39,12 @@ export function attachEqVis(canvas, getLevels, isPlaying) {
     const barW = (w - gap * (BARS - 1)) / BARS;
     for (let i = 0; i < BARS; i++) {
       let v = levels[i] || 0;
-      if (!playing) v *= 0.22;
-      smoothed[i] += (v - smoothed[i]) * (playing ? 0.42 : 0.14);
+      if (!playing) v *= 0.12;
+      smoothed[i] += (v - smoothed[i]) * (playing ? 0.82 : 0.18);
       const bh = Math.max(2, smoothed[i] * (h - 2));
       const x = i * (barW + gap);
       ctx.fillStyle = playing ? accent : line;
-      ctx.globalAlpha = 0.4 + smoothed[i] * 0.6;
+      ctx.globalAlpha = 0.45 + smoothed[i] * 0.55;
       ctx.beginPath();
       if (typeof ctx.roundRect === "function") ctx.roundRect(x, h - bh, barW, bh, Math.min(2, barW / 2));
       else ctx.rect(x, h - bh, barW, bh);

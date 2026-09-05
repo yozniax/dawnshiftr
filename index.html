@@ -12,6 +12,8 @@
       h1.brand { font-size: 26px; margin: 0 0 6px; color: var(--text); text-transform: uppercase; letter-spacing: 0.04em; display: flex; align-items: baseline; }
       h1.brand .dawn, h1.brand .tail { color: var(--accent); }
       h1.brand .by { margin-left: 10px; font-size: 12px; font-weight: 500; letter-spacing: 0.08em; color: #8a8a8a; }
+      h1.brand .by a { color: inherit; text-decoration: none; }
+      h1.brand .by a:hover { color: var(--accent); }
       .tag { color: var(--muted); margin: 0 0 18px; }
       a { color: var(--accent); }
       pre, code {
@@ -44,7 +46,7 @@
   </head>
   <body>
     <div class="page">
-      <h1 class="brand"><span class="dawn">DAWN</span>SHIFT<span class="tail">R</span><span class="by">by DoYoBe</span></h1>
+      <h1 class="brand"><span class="dawn">DAWN</span>SHIFT<span class="tail">R</span><span class="by">by <a href="https://www.doyo.be/" target="_blank" rel="noopener noreferrer">DoYoBe</a></span></h1>
       <p class="tag">Bedside radio. Station notes, sleep timer, live titles when the stream sends them.</p>
       <a class="cta" href="player.html">Open player</a>
       <a class="cta ghost" href="#install">Install extension</a>
@@ -67,8 +69,8 @@ Enter     play highlighted    Shift+T  stations
 ↑ ↓       move cursor         Shift+H  history
 F / N / X fav / note / delete Shift+C  countries
 - / =     volume              S        stations
-P         sleep PT (25)       Esc      fav / close
-ℹ or ?    this list</pre>
+P         pomodoro (25)       Esc      fav / close
+ℹ or ?    keybind</pre>
       </section>
     </div>
   </body>

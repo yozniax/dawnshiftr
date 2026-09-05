@@ -39,7 +39,7 @@ Audio keeps playing in an offscreen document if you close the window.
 | `F` / `N` / `X` | Fav / note / delete highlighted |
 | `-` / `=` | Volume down / up |
 | `S` | Stations tab |
-| `P` | Sleep PT (25 min) |
+| `P` | Pomodoro (25 min) |
 | `Shift+F` / `T` / `H` / `C` | Fav / stations / history / countries |
 | `Esc` | Fav / close |
 | `?` | Shortcuts |

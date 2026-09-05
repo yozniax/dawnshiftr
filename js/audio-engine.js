@@ -93,7 +93,7 @@ export class AudioEngine {
     this.gainNode = this.ctx.createGain();
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 1024;
-    this.analyser.smoothingTimeConstant = 0.45;
+    this.analyser.smoothingTimeConstant = 0.18;
     this._freq = new Uint8Array(this.analyser.frequencyBinCount);
     this.source.connect(this.gainNode);
     this.gainNode.connect(this.ctx.destination);

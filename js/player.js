@@ -101,7 +101,7 @@ function closeOverlay() {
 function openOverlay(next) {
   overlay = next;
   overlayEl.classList.add("open");
-  overlayEl.classList.toggle("modal", next.kind === "help");
+  overlayEl.classList.toggle("modal", next.kind === "help" || next.kind === "memo");
   renderOverlay();
   const field = overlayEl.querySelector("input, textarea");
   if (field) field.focus();
@@ -149,7 +149,7 @@ function renderOverlay() {
         <span>X / D</span><span>Delete highlighted</span>
         <span>- / =</span><span>Volume down / up</span>
         <span>S</span><span>Stations tab</span>
-        <span>P</span><span>Sleep PT (25 min)</span>
+        <span>P</span><span>Pomodoro (25 min)</span>
         <span>Shift+F</span><span>Fav tab</span>
         <span>Shift+T</span><span>Stations tab</span>
         <span>Shift+H</span><span>History tab</span>
@@ -160,14 +160,16 @@ function renderOverlay() {
     </div>`;
     return;
   }
-  overlayEl.innerHTML = `<h2>Station note</h2>
+  overlayEl.innerHTML = `<div class="modal-card" role="dialog" aria-label="Station note">
+    <h2>Note</h2>
     <div class="hint">${escapeHtml(overlay.track?.title || "")}</div>
-    <textarea id="memo-text" rows="4" placeholder="E.G. NIGHT WORK, FEW VOCALS">${escapeHtml(body || "")}</textarea>
+    <textarea id="memo-text" rows="1" placeholder="E.G. NIGHT WORK, FEW VOCALS">${escapeHtml(body || "")}</textarea>
     <div class="overlay-actions">
       <button type="button" class="primary" data-memo="save">Save</button>
       <button type="button" data-memo="clear">Clear</button>
       <button type="button" data-memo="cancel">Close</button>
-    </div>`;
+    </div>
+  </div>`;
   overlayEl.querySelectorAll("[data-memo]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const act = btn.dataset.memo;
@@ -268,8 +270,11 @@ function updateSleepClock(state) {
   const fading = Boolean(state.sleepEndsAt) && remaining <= FADE_MS;
   const label = document.getElementById("sleep-label");
   if (!label) return;
-  if (state.sleepEndsAt) label.textContent = `SLEEPING IN ${formatSleepRemain(remaining)}`;
-  else label.textContent = "SLEEP";
+  if (state.sleepEndsAt) {
+    const remain = formatSleepRemain(remaining);
+    label.textContent =
+      state.sleepMinutes === 25 ? `POMODORO ENDS AT ${remain}` : `SLEEPING IN ${remain}`;
+  } else label.textContent = "SLEEP";
   label.classList.toggle("counting", Boolean(state.sleepEndsAt));
   label.classList.toggle("fading", fading);
 }
@@ -281,7 +286,8 @@ function renderSleepChips(state) {
   el.dataset.sig = sig;
   el.innerHTML = SLEEP_PRESETS.map((mins) => {
     const on = state.sleepMinutes === mins ? "on" : "";
-    return `<button type="button" class="chip ${on}" data-sleep="${mins}">${sleepChipLabel(mins)}</button>`;
+    const title = mins === 25 ? " title=\"POMODORO TECHNIQUE\"" : "";
+    return `<button type="button" class="chip ${on}" data-sleep="${mins}"${title}>${sleepChipLabel(mins)}</button>`;
   }).join("");
 }
 
@@ -765,8 +771,6 @@ document.getElementById("now-note").addEventListener("click", () => {
   openMemo(client.state.air || client.state.playlist[client.state.index]);
 });
 document.getElementById("btn-play").addEventListener("click", () => client.command("toggle"));
-document.getElementById("btn-prev").addEventListener("click", () => client.command("prev"));
-document.getElementById("btn-next").addEventListener("click", () => client.command("next"));
 document.getElementById("vol-slider").addEventListener("input", (e) => {
   client.command("setVolume", Number(e.target.value));
 });
@@ -830,12 +834,12 @@ document.addEventListener("keydown", async (e) => {
       return;
     }
     if (overlay.kind === "memo") {
-      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         const text = overlayEl.querySelector("#memo-text")?.value || "";
         client.command("setStationNote", overlay.track, text);
         closeOverlay();
-        toast("Note saved");
+        toast(text.trim() ? "Note saved" : "Note cleared");
       }
       return;
     }
@@ -903,7 +907,7 @@ document.addEventListener("keydown", async (e) => {
   if (e.code === "KeyP" && !e.shiftKey) {
     e.preventDefault();
     client.command("setSleepTimer", 25);
-    toast("Sleep PT");
+    toast("Pomodoro");
     return;
   }
   if (key === "-" || key === "_" || e.code === "Minus" || e.code === "NumpadSubtract" || e.code === "BracketLeft") {
