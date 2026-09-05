@@ -283,13 +283,47 @@ function updateSleepClock(state) {
 function renderSleepChips(state) {
   const el = document.getElementById("sleep-line");
   const sig = String(state.sleepMinutes ?? "off");
-  if (el.dataset.sig === sig && el.childElementCount) return;
+  if (el.dataset.sig === sig && el.childElementCount) {
+    fitPlayerWindow();
+    return;
+  }
   el.dataset.sig = sig;
   el.innerHTML = SLEEP_PRESETS.map((mins) => {
     const on = state.sleepMinutes === mins ? "on" : "";
     const title = isPomodoro(mins) ? " title=\"POMODORO TECHNIQUE\"" : "";
     return `<button type="button" class="chip ${on}" data-sleep="${mins}"${title}>${sleepChipLabel(mins)}</button>`;
   }).join("");
+  fitPlayerWindow();
+}
+
+let didFitWindow = false;
+function fitPlayerWindow() {
+  if (didFitWindow || surface !== "window") return;
+  if (typeof chrome === "undefined" || !chrome.windows?.getCurrent) return;
+  const chips = document.getElementById("sleep-line");
+  const first = chips?.querySelector(".chip");
+  if (!chips || !first) return;
+  requestAnimationFrame(() => {
+    if (didFitWindow) return;
+    const chipRight = first.getBoundingClientRect().right;
+    const chipLeft = first.getBoundingClientRect().left;
+    const overflow = Math.max(0, chips.scrollWidth - chips.clientWidth);
+    const clipped = chipLeft < 8 || chipRight > window.innerWidth - 8;
+    const extra = overflow + (clipped ? Math.ceil(first.offsetWidth + 28) : 0);
+    if (extra <= 2 && chipLeft >= 8) {
+      didFitWindow = true;
+      return;
+    }
+    didFitWindow = true;
+    chrome.windows
+      .getCurrent()
+      .then((w) => {
+        if (!w?.id) return;
+        const next = Math.min(720, Math.max(w.width || 560, (w.width || 560) + extra + 16));
+        if (next > (w.width || 0)) return chrome.windows.update(w.id, { width: next });
+      })
+      .catch(() => {});
+  });
 }
 
 function playingKey(state) {

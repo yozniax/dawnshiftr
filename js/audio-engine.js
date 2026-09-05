@@ -97,9 +97,9 @@ export class AudioEngine {
     this.gainNode = this.ctx.createGain();
     this.analyser = this.ctx.createAnalyser();
     this.analyser.fftSize = 256;
-    this.analyser.minDecibels = -85;
-    this.analyser.maxDecibels = -25;
-    this.analyser.smoothingTimeConstant = 0.3;
+    this.analyser.minDecibels = -90;
+    this.analyser.maxDecibels = -18;
+    this.analyser.smoothingTimeConstant = 0.18;
     this._freq = new Uint8Array(this.analyser.frequencyBinCount);
     this._wave = new Uint8Array(this.analyser.fftSize);
     this.source.connect(this.analyser);
@@ -127,7 +127,11 @@ export class AudioEngine {
       out[i] = peak / 255;
       if (out[i] > freqPeak) freqPeak = out[i];
     }
-    if (freqPeak >= 0.02) return out;
+    if (freqPeak >= 0.02) {
+      const gain = freqPeak < 0.7 ? Math.min(12, 1.05 / freqPeak) : 1.35;
+      for (let i = 0; i < bars; i++) out[i] = Math.min(1, out[i] * gain);
+      return out;
+    }
     this.analyser.getByteTimeDomainData(this._wave);
     let rms = 0;
     for (let i = 0; i < this._wave.length; i++) {
