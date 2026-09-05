@@ -13,6 +13,7 @@ export class AudioEngine {
     this.currentUrl = null;
     this._cueBuffer = null;
     this._graphPromise = null;
+    this._ignore = false;
     this.bindAudioEvents();
   }
 
@@ -34,15 +35,30 @@ export class AudioEngine {
 
   bindAudioEvents() {
     const a = this.audio;
-    a.addEventListener("playing", () => this.emit("status", "playing"));
+    a.addEventListener("playing", () => {
+      this._ignore = false;
+      this.emit("status", "playing");
+    });
     a.addEventListener("pause", () => {
+      if (this._ignore) return;
       if (!a.ended) this.emit("status", "paused");
     });
-    a.addEventListener("waiting", () => this.emit("status", "buffering"));
-    a.addEventListener("stalled", () => this.emit("status", "buffering"));
-    a.addEventListener("ended", () => this.emit("ended"));
+    a.addEventListener("waiting", () => {
+      if (this._ignore) return;
+      this.emit("status", "buffering");
+    });
+    a.addEventListener("stalled", () => {
+      if (this._ignore) return;
+      this.emit("status", "buffering");
+    });
+    a.addEventListener("ended", () => {
+      if (this._ignore) return;
+      this.emit("ended");
+    });
     a.addEventListener("error", () => {
       const code = a.error?.code;
+      if (code === 1) return;
+      this._ignore = false;
       this.emit("error", code === 4 ? "format / network" : "playback failed");
     });
     a.addEventListener("timeupdate", () => {
@@ -91,8 +107,14 @@ export class AudioEngine {
 
   async load(url, { cors = true } = {}) {
     await this.ensureGraph();
+    this._ignore = true;
     this.currentUrl = url;
     this.corsFailed = false;
+    try {
+      this.audio.pause();
+    } catch {
+      /* empty */
+    }
     this.audio.crossOrigin = cors ? "anonymous" : null;
     this.audio.src = playableUrl(url);
     this.audio.load();

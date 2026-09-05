@@ -427,7 +427,7 @@ function openRadio(seed = "") {
   openOverlay({
     kind: "radio",
     title: "Tune",
-    hint: "Enter to play · a to append. Notes show under known stations.",
+    hint: "Enter to play · a appends (outside the search box). Notes show under known stations.",
     query: seed,
     items: [],
     cursor: 0,
@@ -653,7 +653,8 @@ document.addEventListener("keydown", async (e) => {
       e.preventDefault();
       await activateOverlay();
     }
-    if (e.key === "a" && overlay.kind === "radio" && overlay.items?.[overlay.cursor]) {
+    const typing = e.target instanceof HTMLElement && (e.target.closest("input, textarea") || e.target.isContentEditable);
+    if (e.key === "a" && !typing && overlay.kind === "radio" && overlay.items?.[overlay.cursor]) {
       e.preventDefault();
       const t = overlay.items[overlay.cursor].track;
       client.command("unhideKey", trackKey(t));

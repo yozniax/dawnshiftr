@@ -74,7 +74,11 @@ export class PlayerCore {
     this._sleepIv = 0;
     this._lastSleepSec = -1;
     this._sleepDone = false;
+    this._playGen = 0;
+    this._switching = false;
     this.engine.on("status", (status) => {
+      if (this._switching && (status === "paused" || status === "stopped")) return;
+      if (status === "playing") this._switching = false;
       this.state.status = status;
       this.state.playing = status === "playing";
       if (status === "playing") {
@@ -89,8 +93,12 @@ export class PlayerCore {
       this.state.live = t.live;
       this.broadcast("time");
     });
-    this.engine.on("ended", () => this.next());
+    this.engine.on("ended", () => {
+      if (this._switching) return;
+      void this.next();
+    });
     this.engine.on("error", (msg) => {
+      if (this._switching) return;
       if (this._skips < 6 && this.state.playlist.length > 1) {
         this._skips += 1;
         void this.next({ autoSkip: true });
@@ -316,6 +324,8 @@ export class PlayerCore {
 
   async playIndex(i, { autoplay = true, autoSkip = false } = {}) {
     if (!this.state.playlist.length) return;
+    const gen = ++this._playGen;
+    this._switching = true;
     if (!autoSkip) this._skips = 0;
     this.state.index = ((i % this.state.playlist.length) + this.state.playlist.length) % this.state.playlist.length;
     this.state.cursor = this.state.index;
@@ -323,6 +333,8 @@ export class PlayerCore {
     this.state.nowPlaying = track.title;
     this.state.songTitle = "";
     this.state.error = "";
+    this.state.status = "buffering";
+    this.broadcast();
     let url = track.url;
     if (track.file instanceof Blob) {
       if (track._blobUrl) URL.revokeObjectURL(track._blobUrl);
@@ -331,23 +343,31 @@ export class PlayerCore {
       this.icy.stop();
     } else {
       const resolved = await resolveClick(track.id);
+      if (gen !== this._playGen) return;
       if (resolved) url = resolved;
       url = await unwrapStreamUrl(url);
+      if (gen !== this._playGen) return;
       this._streamUrl = url;
       this.watchMeta(url);
     }
     await this.engine.load(url);
+    if (gen !== this._playGen) return;
     this.applyVolume();
     this._loadedUrl = url;
     if (autoplay) {
       try {
         await this.engine.play();
+        if (gen !== this._playGen) return;
         this.state.playing = true;
         this.state.status = "playing";
       } catch {
+        if (gen !== this._playGen) return;
+        this._switching = false;
         this.state.playing = false;
         this.state.status = "paused";
       }
+    } else {
+      this._switching = false;
     }
     this.broadcast();
     this.persist();
@@ -413,10 +433,16 @@ export class PlayerCore {
     const keep = !play && current && this.keepSession();
     if (keep) {
       const key = trackKey(current);
-      const rest = incoming.filter((t) => trackKey(t) !== key);
-      this.state.playlist = [current, ...rest];
-      this.state.index = 0;
-      this.state.cursor = 0;
+      const found = incoming.findIndex((t) => trackKey(t) === key);
+      if (found >= 0) {
+        this.state.playlist = incoming;
+        this.state.index = found;
+        this.state.cursor = found;
+      } else {
+        this.state.playlist = [current, ...incoming];
+        this.state.index = 0;
+        this.state.cursor = 0;
+      }
       this.broadcast();
       this.persist();
       return;
