@@ -200,6 +200,23 @@ textarea {
   color: var(--muted);
 }
 
+#sleep-label.counting {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+#sleep-label.fading {
+  color: var(--warn);
+}
+
+.hint-cancel {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  padding: 0;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;

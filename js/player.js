@@ -307,12 +307,19 @@ function renderSleep(state) {
     const on = state.sleepMinutes === mins ? "on" : "";
     return `<button type="button" class="chip ${on}" data-sleep="${mins}">${mins}</button>`;
   }).join("");
-  const remain = state.sleepEndsAt
-    ? `<button type="button" class="chip fade" data-sleep="off" title="タイマー解除">${fmtSleep(remaining)}${fading ? " fade" : ""} ×</button>`
-    : "";
-  el.innerHTML = `${remain}${chips}<span class="chip" style="pointer-events:none;border:0">分</span>`;
+  el.innerHTML = `${chips}<span class="chip" style="pointer-events:none;border:0">分</span>`;
   const label = document.getElementById("sleep-label");
-  if (label) label.textContent = fading ? "スリープ（フェード中）" : "スリープ";
+  const hint = document.getElementById("sleep-hint");
+  if (label) {
+    label.textContent = state.sleepEndsAt ? `スリープ  ${fmtSleep(remaining)}` : "スリープ";
+    label.classList.toggle("counting", Boolean(state.sleepEndsAt));
+    label.classList.toggle("fading", fading);
+  }
+  if (hint) {
+    if (!state.sleepEndsAt) hint.textContent = "終了15秒前からフェード";
+    else if (fading) hint.innerHTML = `<button type="button" class="hint-cancel" data-sleep="off">フェード中 · 解除</button>`;
+    else hint.innerHTML = `<button type="button" class="hint-cancel" data-sleep="off">解除</button>`;
+  }
 }
 
 function renderNoise(state) {
@@ -569,7 +576,7 @@ document.getElementById("vol-slider").addEventListener("input", (e) => {
   client.command("setVolume", Number(e.target.value));
 });
 
-document.getElementById("sleep-line").addEventListener("click", (e) => {
+document.querySelector(".panel").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-sleep]");
   if (!btn) return;
   const value = btn.dataset.sleep;
