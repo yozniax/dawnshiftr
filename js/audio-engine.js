@@ -12,7 +12,6 @@ export class AudioEngine {
     this._freq = null;
     this.listeners = new Map();
     this.currentUrl = null;
-    this._cueBuffer = null;
     this._graphPromise = null;
     this._ignore = false;
     this.bindAudioEvents();
@@ -169,22 +168,5 @@ export class AudioEngine {
       /* live */
     }
     this.emit("status", "stopped");
-  }
-
-  async playCue() {
-    await this.ensureGraph();
-    if (!this._cueBuffer) {
-      const url = new URL("../assets/time-is-up.mp3", import.meta.url).href;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("sleep cue missing");
-      this._cueBuffer = await this.ctx.decodeAudioData(await res.arrayBuffer());
-    }
-    const src = this.ctx.createBufferSource();
-    src.buffer = this._cueBuffer;
-    const gain = this.ctx.createGain();
-    gain.gain.value = 1;
-    src.connect(gain);
-    gain.connect(this.ctx.destination);
-    src.start();
   }
 }

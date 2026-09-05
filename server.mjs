@@ -225,5 +225,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`DAWNSHIFTR preview http://127.0.0.1:${PORT}`);
+  console.log(`DAWNSHIFTr preview http://127.0.0.1:${PORT}`);
 });

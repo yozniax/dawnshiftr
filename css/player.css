@@ -1,13 +1,13 @@
 :root {
-  --bg: #16110d;
-  --bg-elev: #221a14;
-  --bg-card: #2a2119;
-  --accent: #e4a15a;
-  --text: #f3e6d4;
-  --muted: #a8927c;
-  --line: #3d3228;
-  --warn: #f0b45a;
-  --danger: #e07a62;
+  --bg: #000000;
+  --bg-elev: #141414;
+  --bg-card: #0d0d0d;
+  --accent: #e85a2a;
+  --text: #ffffff;
+  --muted: #b3b3b3;
+  --line: #2a2a2a;
+  --warn: #e85a2a;
+  --danger: #e85a2a;
   --font: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
   --radius: 12px;
 }
@@ -37,10 +37,11 @@ button, input, textarea {
   flex-direction: column;
   gap: 8px;
   padding: 8px;
-  background:
-    radial-gradient(700px 280px at 90% -30%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 60%),
-    var(--bg);
+  background: var(--bg);
+  text-transform: uppercase;
 }
+
+.overlay, .toast { text-transform: uppercase; }
 
 .top {
   display: flex;
@@ -51,8 +52,17 @@ button, input, textarea {
 
 .brand {
   font-weight: 700;
-  color: var(--accent);
+  color: var(--text);
   font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: none;
+}
+
+.brand .dawn { color: var(--accent); }
+
+.brand .r {
+  color: var(--text);
+  font-weight: 700;
 }
 
 .top-meta {
@@ -61,22 +71,6 @@ button, input, textarea {
   gap: 8px;
   color: var(--muted);
   font-size: 11px;
-}
-
-.theme-dots { display: flex; gap: 5px; }
-
-.theme-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--text) 25%, transparent);
-  cursor: pointer;
-  padding: 0;
-}
-
-.theme-dot.on {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
 }
 
 .now-card {
@@ -129,7 +123,7 @@ button, input, textarea {
   display: block;
   width: 100%;
   height: 40px;
-  margin: 8px 0 6px;
+  margin: 10px 0 0;
 }
 
 .transport {

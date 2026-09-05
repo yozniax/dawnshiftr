@@ -17,7 +17,7 @@ async function ensureOffscreen() {
   await chrome.offscreen.createDocument({
     url: OFFSCREEN_URL,
     reasons: ["AUDIO_PLAYBACK"],
-    justification: "Keep DAWNSHIFTR radio playing in the background",
+    justification: "Keep DAWNSHIFTr radio playing in the background",
   });
 }
 
@@ -91,8 +91,8 @@ chrome.windows.onRemoved.addListener((id) => {
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: "open-window", title: "Open DAWNSHIFTR window", contexts: ["action"] });
-    chrome.contextMenus.create({ id: "open-tab", title: "Open DAWNSHIFTR in tab", contexts: ["action"] });
+    chrome.contextMenus.create({ id: "open-window", title: "Open DAWNSHIFTr window", contexts: ["action"] });
+    chrome.contextMenus.create({ id: "open-tab", title: "Open DAWNSHIFTr in tab", contexts: ["action"] });
     chrome.contextMenus.create({ id: "open-side", title: "Open side panel", contexts: ["action"] });
   });
 });

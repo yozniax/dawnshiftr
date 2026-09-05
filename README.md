@@ -1,4 +1,4 @@
-# DAWNSHIFTR
+# DAWNSHIFTr
 
 A compact bedside radio for Chrome (or the local preview). Add a short note to each station, hide ones you don’t want, and use a sleep timer.
 
@@ -21,10 +21,10 @@ Audio keeps playing in an offscreen document if you close the window.
 
 ## Features
 
-- Radio Browser search, tune history, country lists, URL, local files
+- Radio Browser search, tune history, country lists
 - Station notes (searchable)
 - Hide a station with `x` (Show hidden restores them)
-- Sleep timer: last ~15 seconds fade, then a voice says “The time is up.”
+- Sleep timer: last ~15 seconds fade
 - Live song title when the stream sends ICY metadata
 - Equalizer-style level display while playing
 

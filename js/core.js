@@ -1,6 +1,5 @@
 import { AudioEngine } from "./audio-engine.js";
 import { featuredTracks, resolveClick, unwrapStreamUrl } from "./radio.js";
-import { THEME_NAMES } from "./themes.js";
 import { loadPersisted, savePersisted } from "./storage.js";
 import { IcyWatcher } from "./icy.js";
 
@@ -43,7 +42,6 @@ export function defaultState() {
     status: "stopped",
     live: true,
     volume: 80,
-    theme: "lamp",
     favorites: [],
     notes: seededNotes(playlist),
     hidden: [],
@@ -125,7 +123,6 @@ export class PlayerCore {
 
   async hydrate() {
     const saved = await loadPersisted();
-    if (saved.theme && THEME_NAMES.includes(saved.theme)) this.state.theme = saved.theme;
     if (typeof saved.volume === "number") this.state.volume = Math.max(0, Math.min(100, saved.volume));
     if (Array.isArray(saved.favorites)) this.state.favorites = saved.favorites;
     if (saved.notes && typeof saved.notes === "object") this.state.notes = saved.notes;
@@ -151,7 +148,6 @@ export class PlayerCore {
   persist() {
     const s = this.state;
     return savePersisted({
-      theme: s.theme,
       volume: s.volume,
       favorites: s.favorites,
       notes: s.notes,
@@ -244,7 +240,6 @@ export class PlayerCore {
     this.applyVolume();
     this.persist();
     this.broadcast();
-    void this.engine.playCue();
   }
 
   armSleepAlarm() {
@@ -319,20 +314,13 @@ export class PlayerCore {
     if (!autoSkip) this.rememberHistory(track);
     this.broadcast("status");
     let url = track.url;
-    if (track.file instanceof Blob) {
-      if (track._blobUrl) URL.revokeObjectURL(track._blobUrl);
-      track._blobUrl = URL.createObjectURL(track.file);
-      url = track._blobUrl;
-      this.icy.stop();
-    } else {
-      const resolved = await resolveClick(track.id);
-      if (gen !== this._playGen) return;
-      if (resolved) url = resolved;
-      url = await unwrapStreamUrl(url);
-      if (gen !== this._playGen) return;
-      this._streamUrl = url;
-      this.watchMeta(url);
-    }
+    const resolved = await resolveClick(track.id);
+    if (gen !== this._playGen) return;
+    if (resolved) url = resolved;
+    url = await unwrapStreamUrl(url);
+    if (gen !== this._playGen) return;
+    this._streamUrl = url;
+    this.watchMeta(url);
     await this.engine.load(url);
     if (gen !== this._playGen) return;
     this.applyVolume();
@@ -516,17 +504,6 @@ export class PlayerCore {
     const tracks = this.visible(this.state.favorites.map((t) => ({ ...t })));
     if (!tracks.length) return;
     return this.setPlaylist(tracks, { play: !this.keepSession() });
-  }
-
-  setTheme(name) {
-    this.state.theme = name;
-    this.broadcast();
-    this.persist();
-  }
-
-  cycleTheme() {
-    const i = THEME_NAMES.indexOf(this.state.theme);
-    this.setTheme(THEME_NAMES[(i + 1) % THEME_NAMES.length]);
   }
 
   statePatch(partial) {

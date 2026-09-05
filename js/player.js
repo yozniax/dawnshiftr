@@ -1,6 +1,5 @@
 import { PlayerCore, isExtension, defaultState, SLEEP_PRESETS, FADE_MS, trackKey } from "./core.js";
-import { applyTheme, THEME_NAMES, THEMES } from "./themes.js";
-import { searchStations, stationsByCountry, featuredTracks, loadFromUrl, REGIONS } from "./radio.js";
+import { searchStations, stationsByCountry, featuredTracks, REGIONS } from "./radio.js";
 import { attachEqVis } from "./eq-vis.js";
 
 class ExtensionBridge {
@@ -66,7 +65,6 @@ function wrapLocal(core) {
 const overlayEl = document.getElementById("overlay");
 const toastEl = document.getElementById("toast");
 const listEl = document.getElementById("list");
-const fileInput = document.getElementById("file-input");
 const filterEl = document.getElementById("station-filter");
 
 let overlay = null;
@@ -170,13 +168,6 @@ function renderOverlay() {
     });
     return;
   }
-  if (kind === "url") {
-    overlayEl.innerHTML = `<h2>Open URL</h2>
-      <div class="hint">Stream or M3U / PLS</div>
-      <input type="text" placeholder="https://…" value="${escapeAttr(query)}" />`;
-    bindOverlayInput();
-    return;
-  }
   overlayEl.innerHTML = `<h2>${escapeHtml(title || kind.toUpperCase())}</h2>
     <div class="hint">${escapeHtml(hint || "↑↓ move · Enter select · Esc close")}</div>
     ${kind === "radio" ? `<input id="overlay-search" type="search" placeholder="Search…" value="${escapeAttr(query)}" />` : ""}
@@ -238,19 +229,6 @@ function bindOverlayInput() {
 
 async function activateOverlay() {
   if (!overlay) return;
-  if (overlay.kind === "url") {
-    const raw = overlayEl.querySelector("input")?.value?.trim();
-    closeOverlay();
-    if (!raw) return;
-    try {
-      const tracks = await loadFromUrl(raw);
-      await client.command("setPlaylist", tracks);
-      toast(`Loaded ${tracks.length}`);
-    } catch (err) {
-      toast(err.message || "Load failed");
-    }
-    return;
-  }
   if (overlay.kind === "memo") return;
   const item = overlay.items?.[overlay.cursor];
   if (!item) return;
@@ -265,8 +243,6 @@ const localCore = isExtension() ? null : new PlayerCore();
 const client = isExtension() ? new ExtensionBridge() : wrapLocal(localCore);
 
 if (!isExtension()) localCore.hydrate();
-
-applyTheme(client.state.theme);
 
 attachEqVis(
   document.getElementById("eq-vis"),
@@ -283,7 +259,6 @@ client.subscribe((state, kind) => {
     updatePlayingHighlight(state);
     return;
   }
-  applyTheme(state.theme);
   render(state);
 });
 
@@ -297,7 +272,7 @@ function statusCopy(state) {
 
 function renderChrome(state) {
   const track = state.playlist[state.index];
-  document.getElementById("source-label").textContent = track?.kind === "file" ? "File" : "Radio";
+  document.getElementById("source-label").textContent = "Radio";
   document.getElementById("now-kicker").textContent = statusCopy(state);
   document.getElementById("track-title").textContent = track?.title || "Pick a station";
   const song = document.getElementById("song-title");
@@ -322,7 +297,6 @@ function renderChrome(state) {
 function render(state) {
   renderChrome(state);
   renderSleepChips(state);
-  renderThemes(state);
   renderList(state);
 }
 
@@ -333,7 +307,7 @@ function updateSleepClock(state) {
   if (!label) return;
   if (state.sleepEndsAt) {
     const mins = Math.max(1, Math.ceil(remaining / 60_000));
-    label.textContent = `${mins}分後には寝る`;
+    label.textContent = `Sleeping in ${mins} min`;
   } else {
     label.textContent = "Sleep";
   }
@@ -349,14 +323,6 @@ function renderSleepChips(state) {
   el.innerHTML = SLEEP_PRESETS.map((mins) => {
     const on = state.sleepMinutes === mins ? "on" : "";
     return `<button type="button" class="chip ${on}" data-sleep="${mins}">${mins}</button>`;
-  }).join("");
-}
-
-function renderThemes(state) {
-  const el = document.getElementById("theme-dots");
-  el.innerHTML = THEME_NAMES.map((name) => {
-    const bg = THEMES[name].accent;
-    return `<button type="button" class="theme-dot ${state.theme === name ? "on" : ""}" data-theme="${name}" style="background:${bg}" title="${name}"></button>`;
   }).join("");
 }
 
@@ -394,7 +360,7 @@ function renderList(state) {
   const hiddenN = state.hidden?.length || 0;
   if (!state.playlist.length) {
     listEl.innerHTML = `<div class="empty">No stations.
-      ${hiddenN ? `<div><button type="button" id="unhide-all">Show ${hiddenN} hidden</button></div>` : "Tune, country, URL, or a file."}</div>`;
+      ${hiddenN ? `<div><button type="button" id="unhide-all">Show ${hiddenN} hidden</button></div>` : "Tune or country."}</div>`;
     document.getElementById("unhide-all")?.addEventListener("click", () => client.command("unhideAll"));
     return;
   }
@@ -613,11 +579,6 @@ document.querySelector(".now-card").addEventListener("click", (e) => {
   else client.command("setSleepTimer", Number(value));
 });
 
-document.getElementById("theme-dots").addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-theme]");
-  if (btn) client.command("setTheme", btn.dataset.theme);
-});
-
 document.querySelector(".toolbar-btns").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-act]");
   if (!btn) return;
@@ -625,28 +586,11 @@ document.querySelector(".toolbar-btns").addEventListener("click", (e) => {
   if (act === "radio") openRadio();
   if (act === "country") openCountries();
   if (act === "fav") showFavorites();
-  if (act === "url") openOverlay({ kind: "url", query: "" });
-  if (act === "file") fileInput.click();
 });
 
 filterEl.addEventListener("input", () => {
   listFilter = filterEl.value;
   renderList(client.state);
-});
-
-fileInput.addEventListener("change", async () => {
-  const files = [...fileInput.files];
-  fileInput.value = "";
-  if (!files.length) return;
-  const tracks = files.map((file) => ({
-    id: `${file.name}-${file.size}`,
-    title: file.name.replace(/\.[^.]+$/, ""),
-    url: "",
-    file,
-    kind: "file",
-  }));
-  await client.command("setPlaylist", tracks);
-  toast(`${tracks.length} files`);
 });
 
 document.addEventListener("keydown", async (e) => {
@@ -663,14 +607,6 @@ document.addEventListener("keydown", async (e) => {
         client.command("setStationNote", overlay.track, text);
         closeOverlay();
         toast("Note saved");
-      }
-      return;
-    }
-    if (overlay.kind === "url") {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        overlay.query = overlayEl.querySelector("input")?.value || "";
-        await activateOverlay();
       }
       return;
     }
@@ -766,20 +702,8 @@ document.addEventListener("keydown", async (e) => {
     openCountries();
     return;
   }
-  if (key === "u") {
-    openOverlay({ kind: "url", query: "" });
-    return;
-  }
-  if (key === "o") {
-    fileInput.click();
-    return;
-  }
   if (key === "n") {
     showFavorites();
-    return;
-  }
-  if (key === "t") {
-    client.command("cycleTheme");
     return;
   }
   if (key === "x") {

@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "DAWNSHIFTR",
+  "name": "DAWNSHIFTr",
   "version": "1.0.0",
   "description": "Bedside radio. Station notes, sleep timer, live titles.",
   "icons": {
@@ -10,7 +10,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "DAWNSHIFTR",
+    "default_title": "DAWNSHIFTr",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -60,7 +60,7 @@
     },
     "open-player": {
       "suggested_key": { "default": "Ctrl+Shift+P" },
-      "description": "Open DAWNSHIFTR"
+      "description": "Open DAWNSHIFTr"
     }
   }
 }
