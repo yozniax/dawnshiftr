@@ -1,4 +1,4 @@
-const BARS = 18;
+const BARS = 9;
 
 export function attachEqVis(canvas, getLevels, isPlaying) {
   const ctx = canvas.getContext("2d");

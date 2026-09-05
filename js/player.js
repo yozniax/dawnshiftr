@@ -65,10 +65,21 @@ function wrapLocal(core) {
 const overlayEl = document.getElementById("overlay");
 const toastEl = document.getElementById("toast");
 const listEl = document.getElementById("list");
+const tunesSearchEl = document.getElementById("tunes-search");
 
 let overlay = null;
 let toastTimer = 0;
 let analyserBins = null;
+let pane = "queue";
+let tunesQuery = "";
+let tunesItems = [];
+let tunesLoading = false;
+let tunesError = "";
+let tunesSeq = 0;
+let countryStations = null;
+let countryLoading = false;
+let countryError = "";
+let countryCode = "";
 
 function toast(text) {
   toastEl.textContent = text;
@@ -85,14 +96,10 @@ function closeOverlay() {
 
 function openOverlay(next) {
   overlay = next;
-  overlay._bound = false;
   overlayEl.classList.add("open");
   renderOverlay();
   const field = overlayEl.querySelector("input, textarea");
-  if (field) {
-    field.focus();
-    if (overlay.query != null && field.tagName === "INPUT") field.value = overlay.query;
-  }
+  if (field) field.focus();
 }
 
 function escapeHtml(s) {
@@ -124,7 +131,7 @@ function typingInField() {
 
 function renderOverlay() {
   if (!overlay) return;
-  const { kind, title, hint, query = "", body } = overlay;
+  const { kind, body } = overlay;
   if (kind === "help") {
     overlayEl.innerHTML = `<h2>Keys</h2>
       <div class="keys">
@@ -136,142 +143,34 @@ function renderOverlay() {
         <span>f</span><span>Fav</span>
         <span>R</span><span>Tunes</span>
         <span>N</span><span>Countries</span>
+        <span>n</span><span>Fav pane</span>
         <span>S</span><span>Sleep</span>
         <span>?</span><span>This help</span>
       </div>
       <div class="hint" style="margin-top:10px">Esc closes</div>`;
     return;
   }
-  if (kind === "memo") {
-    overlayEl.innerHTML = `<h2>Station note</h2>
-      <div class="hint">${escapeHtml(overlay.track?.title || "")}</div>
-      <textarea id="memo-text" rows="4" placeholder="E.G. NIGHT WORK, FEW VOCALS">${escapeHtml(body || "")}</textarea>
-      <div class="overlay-actions">
-        <button type="button" class="primary" data-memo="save">Save</button>
-        <button type="button" data-memo="clear">Clear</button>
-        <button type="button" data-memo="cancel">Close</button>
-      </div>`;
-    overlayEl.querySelectorAll("[data-memo]").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const act = btn.dataset.memo;
-        if (act === "cancel") {
-          closeOverlay();
-          return;
-        }
-        const text = act === "clear" ? "" : overlayEl.querySelector("#memo-text")?.value || "";
-        client.command("setStationNote", overlay.track, text);
+  overlayEl.innerHTML = `<h2>Station note</h2>
+    <div class="hint">${escapeHtml(overlay.track?.title || "")}</div>
+    <textarea id="memo-text" rows="4" placeholder="E.G. NIGHT WORK, FEW VOCALS">${escapeHtml(body || "")}</textarea>
+    <div class="overlay-actions">
+      <button type="button" class="primary" data-memo="save">Save</button>
+      <button type="button" data-memo="clear">Clear</button>
+      <button type="button" data-memo="cancel">Close</button>
+    </div>`;
+  overlayEl.querySelectorAll("[data-memo]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const act = btn.dataset.memo;
+      if (act === "cancel") {
         closeOverlay();
-        toast(text.trim() ? "Note saved" : "Note cleared");
-      });
-    });
-    return;
-  }
-  overlayEl.innerHTML = `<h2>${escapeHtml(title || kind.toUpperCase())}</h2>
-    <div class="hint">${escapeHtml(hint || "↑↓ move · Enter select · Esc close")}</div>
-    ${kind === "radio" ? `<input id="overlay-search" type="search" placeholder="SEARCH…" value="${escapeAttr(query)}" />` : ""}
-    <div class="results" id="overlay-results"></div>`;
-  bindOverlayInput();
-  renderOverlayResults();
-}
-
-function stationActionButtons(track, { history = false } = {}) {
-  const fav = client.isFavorite(track);
-  return `<button type="button" class="mini ${fav ? "on" : ""}" data-row-act="fav">FAV</button>
-    <button type="button" class="mini" data-row-act="note">NOTE</button>
-    ${history ? `<button type="button" class="mini hide" data-row-act="delete">DELETE</button>` : ""}`;
-}
-
-function refreshTunesOverlay() {
-  if (overlay?.kind !== "radio") return;
-  if (!String(overlay.query || "").trim()) overlay.items = historyItems();
-  renderOverlayResults();
-}
-
-function renderOverlayResults() {
-  if (!overlay) return;
-  const box = overlayEl.querySelector("#overlay-results");
-  if (!box) return;
-  const { items = [], cursor = 0, loading, error } = overlay;
-  if (loading) {
-    box.innerHTML = `<div class="empty">LOADING…</div>`;
-    return;
-  }
-  if (error) {
-    box.innerHTML = `<div class="empty err">ERR: ${escapeHtml(error)}</div>`;
-    return;
-  }
-  if (!items.length) {
-    const empty =
-      overlay.kind === "radio" && !String(overlay.query || "").trim()
-        ? "TYPE TO SEARCH ALL STATIONS."
-        : "NOTHING HERE.";
-    box.innerHTML = `<div class="empty">${empty}</div>`;
-    return;
-  }
-  box.innerHTML = items
-    .map((it, i) => {
-      const sub = it.sub ? `<span>${escapeHtml(it.sub)}</span>` : "";
-      const actions = it.track
-        ? `<div class="track-side">${stationActionButtons(it.track, { history: Boolean(it.history) })}</div>`
-        : "";
-      return `<div class="item ${i === cursor ? "on" : ""}" data-i="${i}">
-        <div class="item-main"><b>${escapeHtml(it.label)}</b>${sub}</div>
-        ${actions}
-      </div>`;
-    })
-    .join("");
-  box.querySelectorAll(".item").forEach((el) => {
-    el.addEventListener("click", (e) => {
-      if (e.target.closest("[data-row-act]")) return;
-      overlay.cursor = Number(el.dataset.i);
-      activateOverlay();
-    });
-  });
-  box.querySelectorAll("[data-row-act]").forEach((btn) => {
-    btn.addEventListener("click", async (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const item = overlay.items?.[Number(btn.closest(".item")?.dataset.i)];
-      if (!item?.track) return;
-      const act = btn.dataset.rowAct;
-      if (act === "fav") client.command("toggleFavorite", item.track);
-      else if (act === "note") openMemo(item.track);
-      else if (act === "delete" && item.history) {
-        await client.command("removeHistory", item.track);
-        overlay.items = historyItems();
-        overlay.cursor = Math.min(overlay.cursor || 0, Math.max(0, overlay.items.length - 1));
-        renderOverlayResults();
+        return;
       }
+      const text = act === "clear" ? "" : overlayEl.querySelector("#memo-text")?.value || "";
+      client.command("setStationNote", overlay.track, text);
+      closeOverlay();
+      toast(text.trim() ? "Note saved" : "Note cleared");
     });
   });
-  box.querySelector(".item.on")?.scrollIntoView({ block: "nearest" });
-}
-
-function bindOverlayInput() {
-  const input = overlayEl.querySelector("#overlay-search") || overlayEl.querySelector("input[type='text']");
-  if (!input || overlay._bound) return;
-  overlay._bound = true;
-  input.addEventListener("input", () => {
-    overlay.query = input.value;
-    if (!overlay.onQuery) {
-      renderOverlayResults();
-      return;
-    }
-    clearTimeout(overlay._searchTimer);
-    if (!overlay.items?.length) {
-      overlay.loading = true;
-      renderOverlayResults();
-    }
-    overlay._searchTimer = setTimeout(() => overlay.onQuery(overlay.query), 280);
-  });
-}
-
-async function activateOverlay() {
-  if (!overlay) return;
-  if (overlay.kind === "memo") return;
-  const item = overlay.items?.[overlay.cursor];
-  if (!item) return;
-  if (overlay.onPick) await overlay.onPick(item, overlay.cursor);
 }
 
 const surface = new URLSearchParams(location.search).get("surface") || "page";
@@ -295,11 +194,11 @@ attachEqVis(
 client.subscribe((state, kind) => {
   if (kind === "time" || kind === "sleep" || kind === "meta" || kind === "status") {
     renderChrome(state);
-    updatePlayingHighlight(state);
+    if (pane === "queue") updatePlayingHighlight(state);
+    else highlightPlayingKeys(state);
     return;
   }
   render(state);
-  refreshTunesOverlay();
 });
 
 function statusCopy(state) {
@@ -312,22 +211,23 @@ function statusCopy(state) {
 
 function renderChrome(state) {
   const track = state.playlist[state.index];
-  document.getElementById("source-label").textContent = "RADIO";
-  document.getElementById("now-kicker").textContent = statusCopy(state);
+  const kicker = document.getElementById("now-kicker");
+  kicker.textContent = statusCopy(state);
+  kicker.classList.toggle("on-air", state.status === "playing" && state.live);
   document.getElementById("track-title").textContent = track?.title || "PICK A STATION";
   const song = document.getElementById("song-title");
-  const title = state.songTitle;
+  const title = String(state.songTitle || "").trim();
   if (title) {
+    song.hidden = false;
     song.textContent = title;
-    song.classList.remove("empty");
   } else {
-    song.textContent = state.status === "playing" || state.status === "buffering" ? "WAITING FOR TITLE…" : "NO TITLE YET";
-    song.classList.add("empty");
+    song.hidden = true;
+    song.textContent = "";
   }
   const note = noteText(track);
   const noteEl = document.getElementById("now-note");
-  noteEl.textContent = note || "NO NOTE";
-  noteEl.classList.toggle("empty", !note);
+  noteEl.hidden = !note;
+  noteEl.textContent = note;
   document.getElementById("btn-play").textContent = state.status === "playing" ? "❚❚" : "▶";
   const vol = document.getElementById("vol-slider");
   if (document.activeElement !== vol) vol.value = String(state.volume ?? 80);
@@ -337,7 +237,7 @@ function renderChrome(state) {
 function render(state) {
   renderChrome(state);
   renderSleepChips(state);
-  renderList(state);
+  renderPane(state);
 }
 
 function formatSleepRemain(ms) {
@@ -352,11 +252,8 @@ function updateSleepClock(state) {
   const fading = Boolean(state.sleepEndsAt) && remaining <= FADE_MS;
   const label = document.getElementById("sleep-label");
   if (!label) return;
-  if (state.sleepEndsAt) {
-    label.textContent = `SLEEPING IN ${formatSleepRemain(remaining)}`;
-  } else {
-    label.textContent = "SLEEP";
-  }
+  if (state.sleepEndsAt) label.textContent = `SLEEPING IN ${formatSleepRemain(remaining)}`;
+  else label.textContent = "SLEEP";
   label.classList.toggle("counting", Boolean(state.sleepEndsAt));
   label.classList.toggle("fading", fading);
 }
@@ -372,8 +269,8 @@ function renderSleepChips(state) {
   }).join("");
 }
 
-function listSignature(state) {
-  return state.playlist.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n");
+function playingKey(state) {
+  return trackKey(state.playlist[state.index]);
 }
 
 function updatePlayingHighlight(state) {
@@ -384,57 +281,103 @@ function updatePlayingHighlight(state) {
   });
 }
 
-function renderList(state) {
-  const sig = listSignature(state);
-  if (listEl.dataset.sig === sig && listEl.querySelector(".track")) {
-    updatePlayingHighlight(state);
+function highlightPlayingKeys(state) {
+  const key = playingKey(state);
+  listEl.querySelectorAll(".track").forEach((el) => {
+    el.classList.toggle("is-playing", el.dataset.key === key);
+  });
+}
+
+function setPane(next) {
+  if (pane === next && next === "countries" && countryStations) {
+    countryStations = null;
+    countryCode = "";
+    countryError = "";
+    renderPane(client.state);
     return;
   }
-  listEl.dataset.sig = sig;
-  const rows = state.playlist.map((t, i) => ({ t, i }));
-  const hiddenN = state.hidden?.length || 0;
-  if (!state.playlist.length) {
-    listEl.innerHTML = `<div class="empty">No stations.
-      ${hiddenN ? `<div><button type="button" id="unhide-all">Show ${hiddenN} hidden</button></div>` : "Tunes or countries."}</div>`;
-    document.getElementById("unhide-all")?.addEventListener("click", () => client.command("unhideAll"));
-    return;
+  pane = next;
+  if (pane === "tunes" && !tunesQuery) tunesItems = historyItems();
+  if (pane === "countries") {
+    countryStations = null;
+    countryCode = "";
+    countryError = "";
   }
-  listEl.innerHTML = rows
-    .map(({ t, i }) => {
-      const playing = i === state.index ? "is-playing" : "";
-      const cur = i === state.cursor ? "is-cursor" : "";
-      const memo = noteText(t);
-      const fav = client.isFavorite(t);
-      return `<div class="track ${playing} ${cur}" data-i="${i}">
-        <div>
-          <div class="name">${escapeHtml(t.title)}</div>
-          <div class="memo ${memo ? "" : "none"}">${escapeHtml(memo || "No note")}</div>
-        </div>
-        <div class="track-side">
-          <button type="button" class="mini ${fav ? "on" : ""}" data-fav="${i}">FAV</button>
-          <button type="button" class="mini" data-memo="${i}">NOTE</button>
-          <button type="button" class="mini hide" data-hide="${i}">DELETE</button>
-        </div>
-      </div>`;
-    })
-    .join("");
+  renderPane(client.state);
+  if (pane === "tunes") tunesSearchEl.focus();
+}
+
+function renderPane(state) {
+  document.querySelectorAll("[data-pane]").forEach((btn) => {
+    btn.classList.toggle("on", btn.dataset.pane === pane);
+  });
+  tunesSearchEl.hidden = pane !== "tunes";
+  if (pane === "tunes") renderTunes();
+  else if (pane === "countries") renderCountries();
+  else if (pane === "fav") renderFav(state);
+  else renderQueue(state);
+}
+
+function listSignature(state) {
+  return state.playlist.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n");
+}
+
+function stationRow(t, i, { history = false, queue = false } = {}) {
+  const memo = noteText(t);
+  const fav = client.isFavorite(t);
+  const playing = trackKey(t) === playingKey(client.state) ? "is-playing" : "";
+  const cur = queue && i === client.state.cursor ? "is-cursor" : "";
+  const del = queue
+    ? `<button type="button" class="mini hide" data-hide="${i}">DELETE</button>`
+    : `<button type="button" class="mini hide" data-row-act="delete">DELETE</button>`;
+  return `<div class="track ${playing} ${cur}" data-i="${i}" data-key="${escapeAttr(trackKey(t))}">
+    <div>
+      <div class="name">${escapeHtml(t.title)}</div>
+      <div class="memo ${memo ? "" : "none"}">${escapeHtml(memo || "No note")}</div>
+    </div>
+    <div class="track-side">
+      <button type="button" class="mini ${fav ? "on" : ""}" data-row-act="fav">FAV</button>
+      <button type="button" class="mini" data-row-act="note">NOTE</button>
+      ${del}
+    </div>
+  </div>`;
+}
+
+function bindStationRows(tracks, { history = false, queue = false } = {}) {
   listEl.querySelectorAll(".track").forEach((el) => {
     el.addEventListener("click", (e) => {
-      if (e.target.closest("[data-fav],[data-memo],[data-hide]")) return;
+      if (e.target.closest("[data-row-act],[data-hide],[data-fav],[data-memo]")) return;
       const i = Number(el.dataset.i);
-      client.command("playIndex", i);
+      const track = tracks[i];
+      if (queue) client.command("playIndex", i);
+      else if (track) {
+        const qi = client.state.playlist.findIndex((t) => trackKey(t) === trackKey(track));
+        if (qi >= 0) client.command("playIndex", qi);
+        else playPicked(track);
+      }
     });
   });
-  listEl.querySelectorAll("[data-fav]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
+  listEl.querySelectorAll("[data-row-act]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      client.command("toggleFavorite", state.playlist[Number(btn.dataset.fav)]);
-    });
-  });
-  listEl.querySelectorAll("[data-memo]").forEach((btn) => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openMemo(state.playlist[Number(btn.dataset.memo)]);
+      const i = Number(btn.closest(".track")?.dataset.i);
+      const track = tracks[i];
+      if (!track) return;
+      const act = btn.dataset.rowAct;
+      if (act === "fav") client.command("toggleFavorite", track);
+      else if (act === "note") openMemo(track);
+      else if (act === "delete") {
+        if (history) {
+          await client.command("removeHistory", track);
+          tunesItems = historyItems();
+          renderTunes();
+        } else if (pane === "fav") {
+          client.command("toggleFavorite", track);
+        } else {
+          const qi = client.state.playlist.findIndex((t) => trackKey(t) === trackKey(track));
+          if (qi >= 0) client.command("hideStation", qi);
+        }
+      }
     });
   });
   listEl.querySelectorAll("[data-hide]").forEach((btn) => {
@@ -443,6 +386,155 @@ function renderList(state) {
       client.command("hideStation", Number(btn.dataset.hide));
     });
   });
+}
+
+function renderQueue(state) {
+  const sig = `queue\n${listSignature(state)}`;
+  if (listEl.dataset.sig === sig && listEl.querySelector(".track")) {
+    updatePlayingHighlight(state);
+    return;
+  }
+  listEl.dataset.sig = sig;
+  const hiddenN = state.hidden?.length || 0;
+  if (!state.playlist.length) {
+    listEl.innerHTML = `<div class="empty">No stations.
+      ${hiddenN ? `<div><button type="button" id="unhide-all">Show ${hiddenN} hidden</button></div>` : "Tunes or countries."}</div>`;
+    document.getElementById("unhide-all")?.addEventListener("click", () => client.command("unhideAll"));
+    return;
+  }
+  listEl.innerHTML = state.playlist.map((t, i) => stationRow(t, i, { queue: true })).join("");
+  bindStationRows(state.playlist, { queue: true });
+}
+
+function renderFav(state) {
+  const tracks = state.favorites || [];
+  const sig = `fav\n${tracks.map((t) => `${trackKey(t)}\u0001${noteText(t)}`).join("\n")}`;
+  listEl.dataset.sig = sig;
+  if (!tracks.length) {
+    listEl.innerHTML = `<div class="empty">No favorites yet.</div>`;
+    return;
+  }
+  listEl.innerHTML = tracks.map((t, i) => stationRow(t, i)).join("");
+  bindStationRows(tracks);
+}
+
+function historyItems() {
+  return (client.state.history || []).map((t) => t);
+}
+
+function renderTunes() {
+  tunesSearchEl.hidden = false;
+  if (tunesSearchEl.value !== tunesQuery) tunesSearchEl.value = tunesQuery;
+  const q = tunesQuery.trim();
+  if (tunesLoading) {
+    listEl.dataset.sig = "tunes-loading";
+    listEl.innerHTML = `<div class="empty">LOADING…</div>`;
+    return;
+  }
+  if (tunesError) {
+    listEl.dataset.sig = "tunes-err";
+    listEl.innerHTML = `<div class="empty err">ERR: ${escapeHtml(tunesError)}</div>`;
+    return;
+  }
+  const tracks = q ? tunesItems : historyItems();
+  const sig = `tunes\n${q}\n${tracks.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")}`;
+  listEl.dataset.sig = sig;
+  if (!tracks.length) {
+    listEl.innerHTML = `<div class="empty">${q ? "NOTHING HERE." : "TYPE TO SEARCH ALL STATIONS."}</div>`;
+    return;
+  }
+  listEl.innerHTML = tracks.map((t, i) => stationRow(t, i, { history: !q })).join("");
+  bindStationRows(tracks, { history: !q });
+}
+
+async function searchTunes(q) {
+  const seq = ++tunesSeq;
+  const text = q.trim();
+  tunesQuery = q;
+  if (!text) {
+    tunesLoading = false;
+    tunesError = "";
+    tunesItems = historyItems();
+    if (pane === "tunes") renderTunes();
+    return;
+  }
+  tunesLoading = true;
+  if (pane === "tunes") renderTunes();
+  try {
+    const tracks = await searchStations({ name: text, limit: 50 });
+    if (seq !== tunesSeq) return;
+    tunesLoading = false;
+    tunesError = "";
+    tunesItems = tracks;
+    if (pane === "tunes") renderTunes();
+  } catch (err) {
+    if (seq !== tunesSeq) return;
+    tunesLoading = false;
+    tunesError = err.message || "search failed";
+    if (pane === "tunes") renderTunes();
+  }
+}
+
+function renderCountries() {
+  if (countryLoading) {
+    listEl.dataset.sig = "countries-loading";
+    listEl.innerHTML = `<div class="empty">LOADING…</div>`;
+    return;
+  }
+  if (countryError) {
+    listEl.dataset.sig = "countries-err";
+    listEl.innerHTML = `<div class="empty err">ERR: ${escapeHtml(countryError)}</div>`;
+    return;
+  }
+  if (countryStations) {
+    const sig = `countries\n${countryCode}\n${countryStations.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")}`;
+    listEl.dataset.sig = sig;
+    if (!countryStations.length) {
+      listEl.innerHTML = `<div class="empty">No stations.</div>`;
+      return;
+    }
+    listEl.innerHTML = countryStations.map((t, i) => stationRow(t, i)).join("");
+    bindStationRows(countryStations);
+    return;
+  }
+  listEl.dataset.sig = "countries";
+  listEl.innerHTML = REGIONS.map(
+    (r, i) => `<div class="track" data-i="${i}" data-code="${r.code}">
+      <div>
+        <div class="name">${escapeHtml(r.name)}</div>
+        <div class="memo">${r.code}</div>
+      </div>
+    </div>`
+  ).join("");
+  listEl.querySelectorAll(".track").forEach((el) => {
+    el.addEventListener("click", () => loadCountry(el.dataset.code));
+  });
+}
+
+async function loadCountry(code) {
+  countryLoading = true;
+  countryError = "";
+  countryCode = code;
+  renderCountries();
+  try {
+    const tracks = await stationsByCountry(code, 60);
+    countryLoading = false;
+    if (!tracks.length) {
+      countryStations = [];
+      toast("No stations");
+      renderCountries();
+      return;
+    }
+    countryStations = tracks;
+    const keep = isTuned();
+    await queueTracks(tracks);
+    toast(keep ? `${code} · still playing` : `${code} · ${tracks.length}`);
+    renderCountries();
+  } catch (err) {
+    countryLoading = false;
+    countryError = err.message || "load failed";
+    renderCountries();
+  }
 }
 
 function openMemo(track) {
@@ -465,131 +557,6 @@ function queueTracks(tracks) {
   return client.command("setPlaylist", tracks, { play: !keep });
 }
 
-function historyItems() {
-  return (client.state.history || []).map((t) => ({
-    label: t.title,
-    sub: [noteText(t), t.country, t.bitrate ? `${t.bitrate}k` : "RECENT"].filter(Boolean).join(" · "),
-    track: t,
-    history: true,
-  }));
-}
-
-function showFavorites() {
-  if (!client.state.favorites?.length) {
-    toast("No favorites yet");
-    return;
-  }
-  const keep = isTuned();
-  client.command("loadFavorites");
-  toast(keep ? "Favorites · still playing" : "Favorites");
-}
-
-function openRadio(seed = "") {
-  openOverlay({
-    kind: "radio",
-    title: "TUNES",
-    hint: "HISTORY · TYPE TO SEARCH ALL STATIONS",
-    query: seed,
-    items: historyItems(),
-    cursor: 0,
-    loading: false,
-    async onQuery(q) {
-      const seq = (overlay._seq = (overlay._seq || 0) + 1);
-      const text = q.trim();
-      if (!text) {
-        overlay.loading = false;
-        overlay.error = "";
-        overlay.items = historyItems();
-        overlay.cursor = 0;
-        overlay.hint = overlay.items.length
-          ? "HISTORY · TYPE TO SEARCH ALL STATIONS"
-          : "NO HISTORY YET · TYPE TO SEARCH ALL STATIONS";
-        const hint = overlayEl.querySelector(".hint");
-        if (hint) hint.textContent = overlay.hint;
-        renderOverlayResults();
-        return;
-      }
-      overlay.loading = true;
-      renderOverlayResults();
-      try {
-        const tracks = await searchStations({ name: text, limit: 50 });
-        if (overlay?.kind !== "radio" || seq !== overlay._seq) return;
-        overlay.loading = false;
-        overlay.error = "";
-        overlay.items = tracks.map((t) => ({
-          label: t.title,
-          sub: [noteText(t), t.country, t.bitrate ? `${t.bitrate}k` : ""].filter(Boolean).join(" · "),
-          track: t,
-          history: false,
-        }));
-        overlay.cursor = 0;
-        const hint = overlayEl.querySelector(".hint");
-        if (hint) hint.textContent = "ALL STATIONS";
-        renderOverlayResults();
-      } catch (err) {
-        if (overlay?.kind !== "radio" || seq !== overlay._seq) return;
-        overlay.loading = false;
-        overlay.error = err.message;
-        renderOverlayResults();
-      }
-    },
-    async onPick(item) {
-      closeOverlay();
-      await playPicked(item.track);
-    },
-  });
-  overlay.onQuery(seed);
-}
-
-function openCountries() {
-  openOverlay({
-    kind: "countries",
-    title: "COUNTRIES",
-    hint: "LOAD STATIONS FROM A COUNTRY.",
-    items: REGIONS.map((r) => ({ label: r.name, sub: r.code, code: r.code })),
-    cursor: 0,
-    async onPick(item) {
-      overlay.loading = true;
-      renderOverlayResults();
-      try {
-        const tracks = await stationsByCountry(item.code, 60);
-        closeOverlay();
-        if (!tracks.length) {
-          toast("No stations");
-          return;
-        }
-        const keep = isTuned();
-        await queueTracks(tracks);
-        toast(keep ? `${item.code} · still playing` : `${item.code} · ${tracks.length}`);
-      } catch (err) {
-        overlay.loading = false;
-        overlay.error = err.message;
-        renderOverlayResults();
-      }
-    },
-  });
-}
-
-function openSleepPicker() {
-  const current = client.state.sleepMinutes;
-  const names = [...SLEEP_PRESETS.map(String), "off"];
-  openOverlay({
-    kind: "sleep",
-    title: "Sleep timer",
-    hint: "Stops playback.",
-    items: names.map((name) => ({
-      label: name === "off" ? "Off" : `${name} min`,
-      value: name,
-    })),
-    cursor: Math.max(0, names.indexOf(current != null ? String(current) : "off")),
-    async onPick(item) {
-      closeOverlay();
-      if (item.value === "off") client.command("clearSleepTimer");
-      else client.command("setSleepTimer", Number(item.value));
-    },
-  });
-}
-
 document.getElementById("track-title").addEventListener("click", () => client.command("toggle"));
 document.getElementById("now-note").addEventListener("click", () => {
   openMemo(client.state.playlist[client.state.index]);
@@ -603,7 +570,6 @@ document.getElementById("vol-slider").addEventListener("input", (e) => {
 
 document.getElementById("sleep-label").addEventListener("click", () => {
   if (client.state.sleepEndsAt) client.command("clearSleepTimer");
-  else openSleepPicker();
 });
 
 document.querySelector(".now-card").addEventListener("click", (e) => {
@@ -615,12 +581,20 @@ document.querySelector(".now-card").addEventListener("click", (e) => {
 });
 
 document.querySelector(".toolbar-btns").addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-act]");
+  const btn = e.target.closest("[data-pane]");
   if (!btn) return;
-  const act = btn.dataset.act;
-  if (act === "radio") openRadio();
-  if (act === "country") openCountries();
-  if (act === "fav") showFavorites();
+  setPane(btn.dataset.pane);
+});
+
+let searchTimer = 0;
+tunesSearchEl.addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  const q = tunesSearchEl.value;
+  if (!q.trim()) {
+    searchTunes("");
+    return;
+  }
+  searchTimer = setTimeout(() => searchTunes(q), 280);
 });
 
 document.addEventListener("keydown", async (e) => {
@@ -640,31 +614,12 @@ document.addEventListener("keydown", async (e) => {
       }
       return;
     }
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      overlay.cursor = Math.min((overlay.items?.length || 1) - 1, (overlay.cursor || 0) + 1);
-      renderOverlayResults();
-      return;
-    }
-    if (e.key === "ArrowUp") {
-      e.preventDefault();
-      overlay.cursor = Math.max(0, (overlay.cursor || 0) - 1);
-      renderOverlayResults();
-      return;
-    }
-    if (e.key === "Enter" && e.shiftKey && overlay.kind === "radio" && overlay.items?.[overlay.cursor]) {
-      e.preventDefault();
-      const t = overlay.items[overlay.cursor].track;
-      client.command("unhideKey", trackKey(t));
-      await client.command("appendTracks", [t]);
-      toast("Added");
-      return;
-    }
-    if (e.key === "Enter") {
-      e.preventDefault();
-      await activateOverlay();
-      return;
-    }
+    return;
+  }
+
+  if (e.key === "Escape" && pane !== "queue") {
+    pane = "queue";
+    renderPane(client.state);
     return;
   }
 
@@ -685,7 +640,7 @@ document.addEventListener("keydown", async (e) => {
   }
   if (key === "Enter") {
     e.preventDefault();
-    client.command("playIndex", s.cursor);
+    if (pane === "queue") client.command("playIndex", s.cursor);
     return;
   }
   if (key === "s" && !e.shiftKey) {
@@ -694,12 +649,12 @@ document.addEventListener("keydown", async (e) => {
   }
   if (key === "ArrowDown") {
     e.preventDefault();
-    client.command("statePatch", { cursor: Math.min(s.playlist.length - 1, s.cursor + 1) });
+    if (pane === "queue") client.command("statePatch", { cursor: Math.min(s.playlist.length - 1, s.cursor + 1) });
     return;
   }
   if (key === "ArrowUp") {
     e.preventDefault();
-    client.command("statePatch", { cursor: Math.max(0, s.cursor - 1) });
+    if (pane === "queue") client.command("statePatch", { cursor: Math.max(0, s.cursor - 1) });
     return;
   }
   if (key === "ArrowRight") {
@@ -720,27 +675,28 @@ document.addEventListener("keydown", async (e) => {
     return;
   }
   if (key === "S") {
-    openSleepPicker();
+    client.command("setSleepTimer", 10);
     return;
   }
   if (key === "R") {
     e.preventDefault();
-    openRadio();
+    setPane("tunes");
     return;
   }
   if (key === "N") {
-    openCountries();
+    setPane("countries");
     return;
   }
   if (key === "n") {
-    showFavorites();
+    setPane("fav");
     return;
   }
   if (key === "x") {
-    client.command("hideStation", s.cursor);
+    if (pane === "queue") client.command("hideStation", s.cursor);
     return;
   }
   if (key === "1" && !e.ctrlKey) {
+    pane = "queue";
     client.command("setPlaylist", featuredTracks());
     toast("Featured");
   }

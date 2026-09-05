@@ -71,13 +71,16 @@ button, input, textarea {
   font-weight: 700;
 }
 
-.top-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.top-meta,
+#now-kicker {
   color: var(--muted);
   font-size: 11px;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
+
+#now-kicker.on-air { color: var(--accent); }
 
 .now-card {
   background: var(--bg-card);
@@ -85,26 +88,13 @@ button, input, textarea {
   border-radius: var(--radius);
   padding: 8px 10px 8px;
   flex-shrink: 0;
-  contain: layout;
-}
-
-.kicker {
-  margin: 0;
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  min-height: 1.35em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .now-title {
-  margin: 2px 0 0;
+  margin: 0;
   font-size: 15px;
   font-weight: 650;
   line-height: 1.25;
-  min-height: 1.25em;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
@@ -115,7 +105,6 @@ button, input, textarea {
   margin: 2px 0 0;
   color: var(--accent);
   font-size: 12px;
-  min-height: 1.2em;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
@@ -125,10 +114,9 @@ button, input, textarea {
 .song.empty { color: var(--muted); font-weight: 400; }
 
 .now-note {
-  margin: 2px 0 6px;
+  margin: 2px 0 0;
   color: var(--muted);
   font-size: 11px;
-  min-height: 1.2em;
   line-height: 1.2;
   cursor: pointer;
   white-space: nowrap;
@@ -136,15 +124,11 @@ button, input, textarea {
   text-overflow: ellipsis;
 }
 
-.now-note.empty {
-  visibility: hidden;
-}
-
 .eq-vis {
   display: block;
   width: 100%;
-  height: 40px;
-  margin: 10px 0 0;
+  height: 36px;
+  margin: 8px 0 0;
   flex-shrink: 0;
 }
 
@@ -153,6 +137,8 @@ button, input, textarea {
   align-items: center;
   gap: 6px;
   min-height: 36px;
+  margin-top: 6px;
+  flex-wrap: wrap;
 }
 
 .icon-btn, .play-btn {
@@ -179,18 +165,25 @@ button, input, textarea {
 }
 
 .vol {
-  flex: 1;
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-width: 0;
+  gap: 4px;
+  width: 84px;
+  flex: 0 0 84px;
   color: var(--muted);
   font-size: 11px;
 }
 
-.vol input { flex: 1; accent-color: var(--accent); min-width: 0; }
+.vol input { flex: 1; accent-color: var(--accent); min-width: 0; width: 100%; }
 
-.sleep-wrap { margin-top: 6px; }
+.sleep-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
 
 .row-label {
   display: flex;
@@ -209,9 +202,11 @@ button, input, textarea {
   cursor: pointer;
   font: inherit;
   text-align: left;
-  min-height: 1.2em;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.04em;
+  font-size: 11px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 #sleep-label.counting {
@@ -222,10 +217,14 @@ button, input, textarea {
 
 .chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
-  margin-top: 4px;
+  margin: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+
+.chips::-webkit-scrollbar { display: none; }
 
 .chip {
   border: 1px solid var(--line);
@@ -258,7 +257,8 @@ button, input, textarea {
 
 .station-toolbar {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  gap: 6px;
   padding: 8px;
   border-bottom: 1px solid var(--line);
 }
@@ -280,6 +280,23 @@ button, input, textarea {
 }
 
 .toolbar-btns button:hover { color: var(--text); border-color: var(--accent); }
+
+.toolbar-btns button.on {
+  color: var(--text);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+#tunes-search {
+  width: 100%;
+  background: var(--bg-elev);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 8px;
+  outline: none;
+}
+
+#tunes-search:focus { border-color: var(--accent); }
 
 .list {
   flex: 1;

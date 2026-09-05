@@ -36,9 +36,9 @@ Audio keeps playing in an offscreen document if you close the window.
 | `Enter` | Play cursor |
 | `x` | Delete / hide station |
 | `m` | Note |
-| `R` / `N` | Tunes / countries |
-| `S` | Sleep |
-| `?` | Help |
+| `R` / `N` / `n` | Tunes / countries / fav pane |
+| `S` | Sleep 10 min |
+| `Esc` | Back to queue |
 
 ## License
 

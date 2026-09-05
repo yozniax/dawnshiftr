@@ -2,7 +2,7 @@ import { PlayerCore } from "./core.js";
 
 const core = new PlayerCore();
 const port = chrome.runtime.connect({ name: "offscreen" });
-const BARS = 18;
+const BARS = 9;
 let lastBins = 0;
 
 await core.hydrate();

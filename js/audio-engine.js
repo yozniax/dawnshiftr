@@ -101,7 +101,7 @@ export class AudioEngine {
     if (this.ctx.state === "suspended") await this.ctx.resume();
   }
 
-  getSpectrum(bars = 18) {
+  getSpectrum(bars = 9) {
     const out = new Array(bars).fill(0);
     if (!this.analyser || !this._freq) return out;
     this.analyser.getByteFrequencyData(this._freq);

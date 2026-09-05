@@ -11,16 +11,13 @@
     <div id="app">
       <header class="top">
         <div class="brand"><span class="dawn">DAWN</span>SHIFT<span class="r">r</span></div>
-        <div class="top-meta">
-          <span id="source-label">RADIO</span>
-        </div>
+        <span id="now-kicker">STOPPED</span>
       </header>
 
       <section class="now-card">
-        <p class="kicker" id="now-kicker">STOPPED</p>
         <h1 class="now-title" id="track-title">PICK A STATION</h1>
-        <p class="song" id="song-title">NO TITLE YET</p>
-        <p class="now-note empty" id="now-note"></p>
+        <p class="song" id="song-title" hidden></p>
+        <p class="now-note empty" id="now-note" hidden></p>
         <div class="transport">
           <button type="button" class="icon-btn" id="btn-prev" title="Previous">‹</button>
           <button type="button" class="play-btn" id="btn-play" title="Play / pause">▶</button>
@@ -29,12 +26,10 @@
             <span>VOL</span>
             <input id="vol-slider" type="range" min="0" max="100" value="80" />
           </label>
-        </div>
-        <div class="sleep-wrap">
-          <div class="row-label">
+          <div class="sleep-wrap">
             <button type="button" id="sleep-label">SLEEP</button>
+            <div class="chips" id="sleep-line"></div>
           </div>
-          <div class="chips" id="sleep-line"></div>
         </div>
         <canvas class="eq-vis" id="eq-vis" height="40" aria-hidden="true"></canvas>
       </section>
@@ -42,10 +37,11 @@
       <section class="stations">
         <div class="station-toolbar">
           <div class="toolbar-btns">
-            <button type="button" data-act="fav">FAV</button>
-            <button type="button" data-act="radio">TUNES</button>
-            <button type="button" data-act="country">COUNTRIES</button>
+            <button type="button" data-pane="fav">FAV</button>
+            <button type="button" data-pane="tunes">TUNES</button>
+            <button type="button" data-pane="countries">COUNTRIES</button>
           </div>
+          <input id="tunes-search" type="search" placeholder="SEARCH…" hidden />
         </div>
         <div class="list" id="list"></div>
       </section>
