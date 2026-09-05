@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mergeTracks, toggleFavoriteList, trackHaystack, trackKey, tracksForPane, scrollChildIntoContainer } from "../js/tracks.js";
+import { mergeTracks, toggleFavoriteList, trackHaystack, trackKey, tracksForPane, scrollChildIntoContainer, trackAtCursor } from "../js/tracks.js";
 
 test("trackKey prefers id", () => {
   assert.equal(trackKey({ id: "a", url: "http://x" }), "a");
@@ -47,4 +47,25 @@ test("scrollChildIntoContainer only moves the list scrollTop", () => {
   const above = { getBoundingClientRect: () => ({ top: 160, bottom: 190 }) };
   scrollChildIntoContainer(container, above);
   assert.equal(container.scrollTop, 90);
+});
+
+test("scrollChildIntoContainer keeps a sticky heading gutter", () => {
+  const container = {
+    scrollTop: 100,
+    getBoundingClientRect: () => ({ top: 200, bottom: 400 }),
+  };
+  const row = { getBoundingClientRect: () => ({ top: 210, bottom: 250 }) };
+  scrollChildIntoContainer(container, row, 28);
+  assert.equal(container.scrollTop, 82);
+});
+
+test("trackAtCursor prefers the highlighted row key over index", () => {
+  const tracks = [
+    { id: "a", title: "A" },
+    { id: "b", title: "B" },
+    { id: "c", title: "C" },
+  ];
+  const row = { dataset: { i: "0", key: "c" } };
+  assert.equal(trackAtCursor(tracks, 0, row).id, "c");
+  assert.equal(trackAtCursor(tracks, 2, null).id, "c");
 });

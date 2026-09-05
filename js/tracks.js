@@ -38,10 +38,22 @@ export function tracksForPane(pane, { stations = [], favorites = [], history = [
   return [];
 }
 
-export function scrollChildIntoContainer(container, child) {
+export function scrollChildIntoContainer(container, child, gutterTop = 0) {
   if (!container || !child) return;
   const box = container.getBoundingClientRect();
   const row = child.getBoundingClientRect();
-  if (row.top < box.top) container.scrollTop += row.top - box.top;
+  const top = box.top + Math.max(0, Number(gutterTop) || 0);
+  if (row.top < top) container.scrollTop += row.top - top;
   else if (row.bottom > box.bottom) container.scrollTop += row.bottom - box.bottom;
+}
+
+export function trackAtCursor(tracks, cursor, row) {
+  const list = tracks || [];
+  if (row?.dataset?.key) {
+    const found = list.find((t) => trackKey(t) === row.dataset.key);
+    if (found) return found;
+  }
+  const i = row?.dataset?.i != null && row.dataset.i !== "" ? Number(row.dataset.i) : cursor;
+  if (Number.isFinite(i) && list[i]) return list[i];
+  return list[cursor] || null;
 }

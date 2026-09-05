@@ -362,6 +362,8 @@ a.help-btn {
   scrollbar-width: thin;
   scrollbar-color: var(--muted) transparent;
   outline: none;
+  position: relative;
+  scroll-padding-top: 28px;
 }
 
 .list-heading {
@@ -384,6 +386,7 @@ a.help-btn {
   border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
   cursor: pointer;
   color: var(--muted);
+  scroll-margin-top: 28px;
 }
 
 .track:hover, .track.is-cursor {

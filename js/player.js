@@ -3,7 +3,7 @@ import { searchStations, stationsByCountry, popularStations, POPULAR_HEADING, PO
 import { attachEqVis } from "./eq-vis.js";
 import { isEnabled, setEnabled } from "./telemetry.js";
 import { sleepClock, isPomodoro } from "./sleep.js";
-import { mergeTracks, trackHaystack as haystackOf, tracksForPane, scrollChildIntoContainer } from "./tracks.js";
+import { mergeTracks, trackHaystack as haystackOf, tracksForPane, scrollChildIntoContainer, trackAtCursor } from "./tracks.js";
 
 class ExtensionBridge {
   constructor() {
@@ -307,6 +307,16 @@ function highlightPlayingKeys(state) {
   });
 }
 
+function paintList(sig, html, after) {
+  if (listEl.dataset.sig === sig && listEl.querySelector(".track, .empty, .list-heading")) {
+    highlightPlayingKeys(client.state);
+    return;
+  }
+  listEl.dataset.sig = sig;
+  listEl.innerHTML = html;
+  after?.();
+}
+
 function setPane(next, { focusSearch = false } = {}) {
   if (pane === next && next === "countries" && countryStations) {
     countryStations = null;
@@ -433,6 +443,9 @@ listEl.addEventListener(
   },
   true
 );
+listEl.addEventListener("keydown", (e) => {
+  if (e.key === "ArrowUp" || e.key === "ArrowDown") e.preventDefault();
+});
 
 function bindStationRows(tracks, { history = false } = {}) {
   listEl.querySelectorAll(".track").forEach((el) => {
@@ -442,6 +455,8 @@ function bindStationRows(tracks, { history = false } = {}) {
       const i = Number(el.dataset.i);
       const track = tracks[i];
       if (!track) return;
+      browseCursor = i;
+      highlightPlayingKeys(client.state);
       const qi = client.state.playlist.findIndex((t) => trackKey(t) === trackKey(track));
       if (qi >= 0) {
         client.command("unlock");
@@ -498,17 +513,15 @@ function renderFav(state) {
   const tracks = favTracks();
   const all = state.favorites || [];
   const sig = `fav\n${favQuery}\n${tracks.map((t) => `${trackKey(t)}\u0001${noteText(t)}`).join("\n")}`;
-  listEl.dataset.sig = sig;
   if (!all.length) {
-    listEl.innerHTML = `<div class="empty">No favorites yet.</div>`;
+    paintList("fav-empty", `<div class="empty">No favorites yet.</div>`);
     return;
   }
   if (!tracks.length) {
-    listEl.innerHTML = `<div class="empty">NO MATCH.</div>`;
+    paintList("fav-nomatch", `<div class="empty">NO MATCH.</div>`);
     return;
   }
-  listEl.innerHTML = tracks.map((t, i) => stationRow(t, i)).join("");
-  bindStationRows(tracks);
+  paintList(sig, tracks.map((t, i) => stationRow(t, i)).join(""), () => bindStationRows(tracks));
 }
 
 function historyItems() {
@@ -529,14 +542,12 @@ function renderStations() {
   }
   const tracks = stationsItems;
   const sig = `stations\n${q}\n${tracks.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")}`;
-  listEl.dataset.sig = sig;
   if (!tracks.length) {
-    listEl.innerHTML = `<div class="empty">${q ? "NOTHING HERE." : "TYPE TO SEARCH ALL STATIONS."}</div>`;
+    paintList("stations-empty", `<div class="empty">${q ? "NOTHING HERE." : "TYPE TO SEARCH ALL STATIONS."}</div>`);
     return;
   }
   const heading = !q ? `<div class="list-heading">${POPULAR_HEADING}</div>` : "";
-  listEl.innerHTML = heading + tracks.map((t, i) => stationRow(t, i)).join("");
-  bindStationRows(tracks);
+  paintList(sig, heading + tracks.map((t, i) => stationRow(t, i)).join(""), () => bindStationRows(tracks));
 }
 
 async function searchStationsPane(q) {
@@ -602,17 +613,15 @@ function renderHistory() {
   const q = historyQuery.trim().toLowerCase();
   const tracks = historyItems().filter((t) => !q || trackHaystack(t).includes(q));
   const sig = `history\n${q}\n${tracks.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")}`;
-  listEl.dataset.sig = sig;
   if (!historyItems().length) {
-    listEl.innerHTML = `<div class="empty">NO HISTORY YET.</div>`;
+    paintList("history-empty", `<div class="empty">NO HISTORY YET.</div>`);
     return;
   }
   if (!tracks.length) {
-    listEl.innerHTML = `<div class="empty">NO MATCH.</div>`;
+    paintList("history-nomatch", `<div class="empty">NO MATCH.</div>`);
     return;
   }
-  listEl.innerHTML = tracks.map((t, i) => stationRow(t, i, { history: true })).join("");
-  bindStationRows(tracks, { history: true });
+  paintList(sig, tracks.map((t, i) => stationRow(t, i, { history: true })).join(""), () => bindStationRows(tracks, { history: true }));
 }
 
 function filteredRegions() {
@@ -709,18 +718,23 @@ function visibleTracks() {
 }
 
 function highlightedTrack() {
-  const tracks = visibleTracks();
-  return tracks[browseCursor] || null;
+  return trackAtCursor(visibleTracks(), browseCursor, listEl.querySelector(".track.is-cursor"));
+}
+
+function cursorGutter() {
+  return listEl.querySelector(".list-heading")?.offsetHeight || 0;
 }
 
 function moveBrowse(delta) {
-  const n = listEl.querySelectorAll(".track").length;
-  if (!n) return;
-  browseCursor = Math.max(0, Math.min(n - 1, browseCursor + delta));
-  listEl.querySelectorAll(".track").forEach((el) => {
-    el.classList.toggle("is-cursor", Number(el.dataset.i) === browseCursor);
-  });
-  scrollChildIntoContainer(listEl, listEl.querySelector(".track.is-cursor"));
+  const rows = [...listEl.querySelectorAll(".track")];
+  if (!rows.length) return;
+  let idx = rows.findIndex((el) => el.classList.contains("is-cursor"));
+  if (idx < 0) idx = rows.findIndex((el) => Number(el.dataset.i) === browseCursor);
+  if (idx < 0) idx = 0;
+  idx = Math.max(0, Math.min(rows.length - 1, idx + delta));
+  browseCursor = Number(rows[idx].dataset.i);
+  rows.forEach((el, i) => el.classList.toggle("is-cursor", i === idx));
+  scrollChildIntoContainer(listEl, rows[idx], cursorGutter());
 }
 
 function moveCursor(delta) {
