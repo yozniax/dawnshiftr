@@ -56,6 +56,7 @@ export class PlayerCore {
     this._skips = 0;
     this._sleepIv = 0;
     this._lastSleepSec = -1;
+    this._sleepDone = false;
     this.engine.on("status", (status) => {
       this.state.status = status;
       this.state.playing = status === "playing";
@@ -208,6 +209,7 @@ export class PlayerCore {
     this.state.sleepMinutes = mins;
     this.state.sleepEndsAt = Date.now() + mins * 60_000;
     this.state.sleepRemainingMs = mins * 60_000;
+    this._sleepDone = false;
     this.startSleepLoop();
     this.armSleepAlarm();
     this.persist();
@@ -226,6 +228,8 @@ export class PlayerCore {
   }
 
   finishSleepTimer() {
+    if (this._sleepDone) return;
+    this._sleepDone = true;
     this.stopSleepLoop();
     this.clearSleepAlarm();
     this.state.sleepMinutes = null;
@@ -235,6 +239,7 @@ export class PlayerCore {
     this.applyVolume();
     this.persist();
     this.broadcast();
+    void this.engine.playGong();
   }
 
   armSleepAlarm() {
