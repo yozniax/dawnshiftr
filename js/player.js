@@ -258,9 +258,6 @@ function renderChrome(state) {
   title.classList.toggle("is-on", isOnAir(state));
   const song = document.getElementById("song-title");
   song.textContent = String(state.songTitle || "").trim();
-  const noteEl = document.getElementById("now-note");
-  const note = noteText(track);
-  noteEl.textContent = note;
   document.getElementById("btn-play").textContent = state.status === "playing" ? "❚❚" : "▶";
   const vol = document.getElementById("vol-slider");
   if (document.activeElement !== vol) vol.value = String(state.volume ?? 80);
@@ -813,9 +810,6 @@ function playPicked(track) {
 document.addEventListener("pointerdown", () => client.command("unlock"), true);
 document.addEventListener("keydown", () => client.command("unlock"), true);
 document.getElementById("track-title").addEventListener("click", () => client.command("toggle"));
-document.getElementById("now-note").addEventListener("click", () => {
-  openMemo(client.state.air || client.state.playlist[client.state.index]);
-});
 document.getElementById("btn-play").addEventListener("click", () => client.command("toggle"));
 document.getElementById("vol-slider").addEventListener("input", (e) => {
   client.command("setVolume", Number(e.target.value));

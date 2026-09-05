@@ -130,8 +130,8 @@ a.help-btn {
 
 .now-copy {
   display: grid;
-  grid-template-rows: 19px 18px 14px;
-  height: 51px;
+  grid-template-rows: 19px 18px;
+  height: 37px;
   overflow: hidden;
 }
 
@@ -149,35 +149,22 @@ a.help-btn {
 
 .now-title.is-on { color: var(--accent); }
 
-.song-slot,
-.note-slot {
+.song-slot {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-}
-
-.song-slot {
   height: 18px;
   color: var(--accent);
   font-size: 12px;
   line-height: 18px;
 }
 
-.song-slot span,
-.note-slot span {
+.song-slot span {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   height: 100%;
-}
-
-.note-slot {
-  height: 14px;
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 14px;
-  cursor: pointer;
 }
 
 .eq-vis {
