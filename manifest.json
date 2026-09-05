@@ -1,0 +1,65 @@
+{
+  "manifest_version": 3,
+  "name": "cliamp",
+  "version": "1.0.0",
+  "description": "Winamp for Chrome. Radio, playlists, 10-band EQ, visualizers — a terminal music player in the side panel.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "cliamp",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "player.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "offline_enabled": false,
+  "permissions": [
+    "sidePanel",
+    "offscreen",
+    "storage",
+    "declarativeNetRequest",
+    "contextMenus",
+    "commands"
+  ],
+  "host_permissions": ["<all_urls>"],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "cors",
+        "enabled": true,
+        "path": "rules.json"
+      }
+    ]
+  },
+  "commands": {
+    "play-pause": {
+      "suggested_key": { "default": "MediaPlayPause" },
+      "description": "Play / pause"
+    },
+    "next-track": {
+      "suggested_key": { "default": "MediaNextTrack" },
+      "description": "Next track"
+    },
+    "prev-track": {
+      "suggested_key": { "default": "MediaPrevTrack" },
+      "description": "Previous track"
+    },
+    "open-player": {
+      "suggested_key": { "default": "Ctrl+Shift+P" },
+      "description": "Open cliamp"
+    }
+  }
+}

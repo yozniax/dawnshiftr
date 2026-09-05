@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cliamp</title>
+    <link rel="icon" href="icons/icon32.png" />
+    <link rel="stylesheet" href="css/player.css" />
+  </head>
+  <body>
+    <div id="app">
+      <div class="player">
+        <div class="row">
+          <div class="brand">C L I A M P</div>
+          <div class="badge">[<em id="source-label">Radio</em>]</div>
+        </div>
+        <div class="now">
+          <span class="glyph" id="glyph">♫</span>
+          <span class="title" id="track-title">Stopped</span>
+        </div>
+        <div class="status-line" id="status-line">00:00 / 00:00 ■ Stopped</div>
+        <div class="stream-bar live" id="stream-bar" title="Seek">
+          <div class="fill" id="stream-fill"></div>
+        </div>
+        <div class="vis-wrap"><canvas id="viz"></canvas></div>
+        <div class="meta">
+          <div class="eq-line" id="eq-line"></div>
+          <div class="vol" id="vol-line"></div>
+          <div class="src-line" id="src-line"></div>
+        </div>
+        <div class="playlist-head" id="playlist-head"></div>
+        <div class="list" id="list"></div>
+        <div class="help" id="help"></div>
+      </div>
+
+      <div class="overlay" id="overlay"></div>
+      <div class="toast" id="toast"></div>
+      <input id="file-input" type="file" accept="audio/*,.m3u,.m3u8,.pls" multiple hidden />
+    </div>
+    <script type="module" src="js/player.js"></script>
+  </body>
+</html>

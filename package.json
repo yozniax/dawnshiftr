@@ -1,0 +1,11 @@
+{
+  "name": "cliamp-chrome",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "cliamp-inspired terminal music player as a Chrome extension",
+  "scripts": {
+    "start": "node server.mjs",
+    "preview": "node server.mjs"
+  }
+}

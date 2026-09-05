@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>cliamp for Chrome</title>
+    <link rel="icon" href="icons/icon32.png" />
+    <link rel="stylesheet" href="css/player.css" />
+    <style>
+      body { overflow: auto; }
+      .page {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 28px 18px 64px;
+        position: relative;
+        z-index: 1;
+      }
+      h1 {
+        font-size: 22px;
+        letter-spacing: 0.28em;
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .tag {
+        color: var(--fg);
+        margin: 0 0 22px;
+      }
+      a { color: var(--accent); }
+      pre, code {
+        font-family: inherit;
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+      }
+      pre {
+        padding: 12px 14px;
+        overflow: auto;
+        border: 1px solid color-mix(in srgb, var(--fg) 30%, transparent);
+      }
+      ol { color: var(--bright-fg); padding-left: 1.2em; }
+      li { margin: 8px 0; }
+      .cta {
+        display: inline-block;
+        margin: 8px 8px 18px 0;
+        padding: 8px 14px;
+        border: 1px solid var(--accent);
+        color: var(--bg);
+        background: var(--accent);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .cta.ghost {
+        background: transparent;
+        color: var(--accent);
+      }
+      section { margin: 28px 0; }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1>C L I A M P</h1>
+      <p class="tag">Winamp for Chrome. ターミナル風プレイヤーをサイドパネルに。</p>
+      <a class="cta" href="player.html">プレイヤーを開く</a>
+      <a class="cta ghost" href="https://www.cliamp.stream/#install">オリジナル cliamp</a>
+
+      <section>
+        <h2 style="color: var(--accent); font-size: 14px; letter-spacing: 0.12em;">INSTALL EXTENSION</h2>
+        <ol>
+          <li>Chrome で <code>chrome://extensions</code> を開く</li>
+          <li>右上の「デベロッパーモード」をオン</li>
+          <li>「パッケージ化されていない拡張機能を読み込む」</li>
+          <li>このリポジトリのフォルダを選択する</li>
+          <li>ツールバーのアイコンをクリックしてサイドパネルを開く</li>
+        </ol>
+        <p class="tag">右クリックからウィンドウ表示 / タブ表示もできます。再生はオフスクリーンで続くので、パネルを閉じても止まりません。</p>
+      </section>
+
+      <section>
+        <h2 style="color: var(--accent); font-size: 14px; letter-spacing: 0.12em;">FEATURES</h2>
+        <pre>playlist · 10-band EQ · visualizers · Radio Browser
+featured SomaFM / Nightride · local files · stream URLs
+themes (21) · favorites · history · lyrics (lrclib)
+keyboard map aligned with cliamp</pre>
+      </section>
+
+      <section>
+        <h2 style="color: var(--accent); font-size: 14px; letter-spacing: 0.12em;">KEYS</h2>
+        <pre>Space  play/pause     R  radio search     t  theme
+Enter  play cursor    N  by country       v  visualizer
+f      favorite       u  load URL         e  EQ preset
+z / r  shuffle/repeat o  local files      ?  keymap</pre>
+      </section>
+    </div>
+  </body>
+</html>
