@@ -2,7 +2,7 @@ import { PlayerCore } from "./core.js";
 
 const core = new PlayerCore();
 const port = chrome.runtime.connect({ name: "offscreen" });
-const BARS = 9;
+const BARS = 7;
 let lastBins = 0;
 
 await core.hydrate();
@@ -12,7 +12,7 @@ core.subscribe((state, kind) => {
 });
 
 function pumpAnalyser(now) {
-  if (core.state.status === "playing" && now - lastBins > 32) {
+  if ((core.state.status === "playing" || core.state.playing) && now - lastBins > 32) {
     lastBins = now;
     port.postMessage({ type: "analyser", bins: core.engine.getSpectrum(BARS) });
   }

@@ -139,7 +139,7 @@ function renderOverlay() {
   const { kind, body } = overlay;
   if (kind === "help") {
     overlayEl.innerHTML = `<div class="modal-card" role="dialog" aria-label="Shortcuts">
-      <h2>Shortcuts</h2>
+      <h2>Keybind</h2>
       <div class="keys">
         <span>Space</span><span>Play / pause</span>
         <span>Enter</span><span>Play highlighted</span>
@@ -204,10 +204,15 @@ if (!isExtension()) {
 attachEqVis(
   document.getElementById("eq-vis"),
   (n) => {
-    if (localCore?.engine?.getSpectrum) return localCore.engine.getSpectrum(n);
+    const eng = localCore?.engine;
+    if (eng?.ctx?.state === "suspended") void eng.ctx.resume();
+    if (eng?.getSpectrum) return eng.getSpectrum(n);
     return analyserBins || [];
   },
-  () => client.state.status === "playing"
+  () => {
+    const s = client.state.status;
+    return s === "playing" || client.state.playing || (s === "buffering" && !!client.state.air);
+  }
 );
 
 client.subscribe((state, kind) => {
@@ -447,8 +452,10 @@ function bindStationRows(tracks, { history = false } = {}) {
       const track = tracks[i];
       if (!track) return;
       const qi = client.state.playlist.findIndex((t) => trackKey(t) === trackKey(track));
-      if (qi >= 0) client.command("playIndex", qi, { moveCursor: true });
-      else playPicked(track);
+      if (qi >= 0) {
+        client.command("unlock");
+        client.command("playIndex", qi, { moveCursor: true });
+      } else playPicked(track);
     });
   });
   listEl.querySelectorAll("[data-row-act]").forEach((btn) => {
@@ -766,6 +773,8 @@ function playPicked(track) {
   return client.command("setPlaylist", [track, ...client.state.playlist.filter((t) => t.url !== track.url)]);
 }
 
+document.addEventListener("pointerdown", () => client.command("unlock"), true);
+document.addEventListener("keydown", () => client.command("unlock"), true);
 document.getElementById("track-title").addEventListener("click", () => client.command("toggle"));
 document.getElementById("now-note").addEventListener("click", () => {
   openMemo(client.state.air || client.state.playlist[client.state.index]);
@@ -891,6 +900,7 @@ document.addEventListener("keydown", async (e) => {
   }
   if (key === " ") {
     e.preventDefault();
+    client.command("unlock");
     client.command("toggle");
     return;
   }

@@ -4,12 +4,16 @@ export class AudioEngine {
   constructor() {
     this.audio = new Audio();
     this.audio.preload = "auto";
-    this.audio.crossOrigin = "anonymous";
+    this.audio.playsInline = true;
+    if (typeof location === "undefined" || location.protocol === "chrome-extension:") {
+      this.audio.crossOrigin = "anonymous";
+    }
     this.ctx = null;
     this.source = null;
     this.gainNode = null;
     this.analyser = null;
     this._freq = null;
+    this._wave = null;
     this.listeners = new Map();
     this.currentUrl = null;
     this._graphPromise = null;
@@ -92,34 +96,48 @@ export class AudioEngine {
     this.source = this.ctx.createMediaElementSource(this.audio);
     this.gainNode = this.ctx.createGain();
     this.analyser = this.ctx.createAnalyser();
-    this.analyser.fftSize = 1024;
-    this.analyser.smoothingTimeConstant = 0.18;
+    this.analyser.fftSize = 256;
+    this.analyser.minDecibels = -85;
+    this.analyser.maxDecibels = -25;
+    this.analyser.smoothingTimeConstant = 0.3;
     this._freq = new Uint8Array(this.analyser.frequencyBinCount);
-    this.source.connect(this.gainNode);
+    this._wave = new Uint8Array(this.analyser.fftSize);
+    this.source.connect(this.analyser);
+    this.analyser.connect(this.gainNode);
     this.gainNode.connect(this.ctx.destination);
-    this.gainNode.connect(this.analyser);
     if (this.ctx.state === "suspended") await this.ctx.resume();
   }
 
-  getSpectrum(bars = 9) {
+  getSpectrum(bars = 7) {
     const out = new Array(bars).fill(0);
+    if (this.ctx?.state === "suspended") void this.ctx.resume();
     if (!this.analyser || !this._freq) return out;
-    if (this._freq.length !== this.analyser.frequencyBinCount) {
-      this._freq = new Uint8Array(this.analyser.frequencyBinCount);
-    }
     this.analyser.getByteFrequencyData(this._freq);
     const n = this._freq.length;
-    const usable = Math.max(bars * 2, Math.floor(n * 0.58));
+    let freqPeak = 0;
     for (let i = 0; i < bars; i++) {
-      const t0 = i / bars;
-      const t1 = (i + 1) / bars;
-      const lo = Math.floor(t0 ** 1.25 * usable);
-      const hi = Math.max(lo + 3, Math.floor(t1 ** 1.25 * usable));
+      const lo = Math.max(1, Math.floor((i / bars) * n * 0.72));
+      const hi = Math.max(lo + 2, Math.floor(((i + 1) / bars) * n * 0.72));
       let peak = 0;
       for (let j = lo; j < hi && j < n; j++) {
         if (this._freq[j] > peak) peak = this._freq[j];
       }
       out[i] = peak / 255;
+      if (out[i] > freqPeak) freqPeak = out[i];
+    }
+    if (freqPeak >= 0.02) return out;
+    this.analyser.getByteTimeDomainData(this._wave);
+    let rms = 0;
+    for (let i = 0; i < this._wave.length; i++) {
+      const v = (this._wave[i] - 128) / 128;
+      rms += v * v;
+    }
+    rms = Math.sqrt(rms / this._wave.length);
+    if (rms < 0.01) return out;
+    const now = (typeof performance !== "undefined" ? performance.now() : Date.now()) / 180;
+    for (let i = 0; i < bars; i++) {
+      const wobble = 0.45 + 0.55 * Math.abs(Math.sin(now + i * 0.85));
+      out[i] = Math.min(1, rms * 4.5 * wobble);
     }
     return out;
   }
@@ -140,7 +158,6 @@ export class AudioEngine {
     } catch {
       /* empty */
     }
-    this.audio.crossOrigin = "anonymous";
     this.audio.src = playableUrl(url);
     this.audio.load();
     this.emit("status", "buffering");
@@ -148,18 +165,10 @@ export class AudioEngine {
 
   async play() {
     await this.ensureGraph();
+    if (this.ctx?.state === "suspended") await this.ctx.resume();
     try {
       await this.audio.play();
     } catch (err) {
-      if (this.audio.crossOrigin && this.currentUrl) {
-        this.audio.crossOrigin = null;
-        const t = this.audio.currentTime;
-        this.audio.load();
-        this.audio.currentTime = t;
-        await this.audio.play();
-        this.emit("status", "playing");
-        return;
-      }
       throw err;
     }
   }

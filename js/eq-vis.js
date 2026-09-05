@@ -1,4 +1,3 @@
-const RAW_BARS = 9;
 const BARS = 7;
 
 export function attachEqVis(canvas, getLevels, isPlaying) {
@@ -8,19 +7,20 @@ export function attachEqVis(canvas, getLevels, isPlaying) {
 
   function size() {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const w = canvas.clientWidth || canvas.parentElement?.clientWidth || 280;
-    const h = canvas.clientHeight || 40;
-    canvas.width = Math.max(1, Math.floor(w * dpr));
-    canvas.height = Math.max(1, Math.floor(h * dpr));
+    const w = Math.max(1, canvas.clientWidth || canvas.parentElement?.clientWidth || 280);
+    const h = Math.max(1, canvas.clientHeight || 48);
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
-  function contrast(raw) {
-    const slice = (raw || []).slice(0, BARS);
+  function fallback(t) {
     const out = new Array(BARS);
     for (let i = 0; i < BARS; i++) {
-      const v = Math.max(0, (slice[i] || 0) - 0.03);
-      out[i] = Math.min(1, Math.pow(v, 0.62) * 1.7);
+      const a = Math.abs(Math.sin(t * 5.4 + i * 0.95));
+      const b = Math.abs(Math.sin(t * 2.3 + i * 1.6));
+      const c = Math.abs(Math.sin(t * 8.1 + i * 0.4));
+      out[i] = Math.min(1, 0.12 + a * 0.7 + b * 0.45 + c * 0.5);
     }
     return out;
   }
@@ -28,25 +28,29 @@ export function attachEqVis(canvas, getLevels, isPlaying) {
   function draw() {
     raf = requestAnimationFrame(draw);
     const w = canvas.clientWidth || 280;
-    const h = canvas.clientHeight || 40;
+    const h = canvas.clientHeight || 48;
     const playing = isPlaying();
-    const levels = contrast(getLevels(RAW_BARS));
+    const raw = getLevels(BARS) || [];
+    let max = 0;
+    for (let i = 0; i < BARS; i++) max = Math.max(max, raw[i] || 0);
+    const levels = playing && max < 0.02 ? fallback(performance.now() / 1000) : raw;
     const css = getComputedStyle(document.documentElement);
     const accent = css.getPropertyValue("--accent").trim() || "#e85a2a";
     const line = css.getPropertyValue("--line").trim() || "#2a2a2a";
     ctx.clearRect(0, 0, w, h);
-    const gap = 3;
+    const gap = 4;
     const barW = (w - gap * (BARS - 1)) / BARS;
     for (let i = 0; i < BARS; i++) {
-      let v = levels[i] || 0;
-      if (!playing) v *= 0.12;
-      smoothed[i] += (v - smoothed[i]) * (playing ? 0.82 : 0.18);
-      const bh = Math.max(2, smoothed[i] * (h - 2));
+      let v = Math.min(1, (levels[i] || 0) * 1.35);
+      if (!playing) v *= 0.08;
+      const rise = v > smoothed[i];
+      smoothed[i] += (v - smoothed[i]) * (playing ? (rise ? 0.72 : 0.28) : 0.16);
+      const bh = Math.max(3, smoothed[i] * (h - 3));
       const x = i * (barW + gap);
       ctx.fillStyle = playing ? accent : line;
-      ctx.globalAlpha = 0.45 + smoothed[i] * 0.55;
+      ctx.globalAlpha = 0.5 + smoothed[i] * 0.5;
       ctx.beginPath();
-      if (typeof ctx.roundRect === "function") ctx.roundRect(x, h - bh, barW, bh, Math.min(2, barW / 2));
+      if (typeof ctx.roundRect === "function") ctx.roundRect(x, h - bh, barW, bh, Math.min(3, barW / 2));
       else ctx.rect(x, h - bh, barW, bh);
       ctx.fill();
     }

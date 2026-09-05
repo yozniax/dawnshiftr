@@ -395,6 +395,8 @@ export class PlayerCore {
 
   async playIndex(i, { autoplay = true, autoSkip = false, moveCursor = false } = {}) {
     if (!this.state.playlist.length) return;
+    await this.unlock();
+    if (!this.state.playlist.length) return;
     this.state.index = ((i % this.state.playlist.length) + this.state.playlist.length) % this.state.playlist.length;
     if (moveCursor) this.state.cursor = this.state.index;
     const queued = this.state.playlist[this.state.index];
@@ -443,6 +445,7 @@ export class PlayerCore {
   }
 
   async toggle() {
+    await this.unlock();
     if (this.state.status === "playing") {
       if (this._source === "youtube") this.youtube.pause();
       else this.engine.pause();
