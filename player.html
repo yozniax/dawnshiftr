@@ -11,7 +11,10 @@
     <div id="app">
       <header class="top">
         <div class="brand"><span class="dawn">DAWN</span>SHIFT<span class="r">r</span></div>
-        <span id="now-kicker">STOPPED</span>
+        <div class="top-right">
+          <span id="now-kicker">STOPPED</span>
+          <button type="button" class="help-btn" id="btn-help" title="Shortcuts" aria-label="Shortcuts">ℹ</button>
+        </div>
       </header>
 
       <section class="now-card">
@@ -23,7 +26,6 @@
           <button type="button" class="play-btn" id="btn-play" title="Play / pause">▶</button>
           <button type="button" class="icon-btn" id="btn-next" title="Next">›</button>
           <label class="vol">
-            <span>VOL</span>
             <input id="vol-slider" type="range" min="0" max="100" value="80" />
           </label>
           <div class="sleep-wrap">

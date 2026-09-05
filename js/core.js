@@ -48,6 +48,7 @@ export function defaultState() {
     history: [],
     error: "",
     songTitle: "",
+    air: null,
     sleepMinutes: null,
     sleepEndsAt: null,
     sleepRemainingMs: 0,
@@ -258,7 +259,7 @@ export class PlayerCore {
   }
 
   current() {
-    return this.state.playlist[this.state.index] || null;
+    return this.state.air || this.state.playlist[this.state.index] || null;
   }
 
   noteFor(track) {
@@ -300,14 +301,15 @@ export class PlayerCore {
     this.icy.watch(url, (title) => this.setSongTitle(title));
   }
 
-  async playIndex(i, { autoplay = true, autoSkip = false } = {}) {
+  async playIndex(i, { autoplay = true, autoSkip = false, moveCursor = false } = {}) {
     if (!this.state.playlist.length) return;
     const gen = ++this._playGen;
     this._switching = true;
     if (!autoSkip) this._skips = 0;
     this.state.index = ((i % this.state.playlist.length) + this.state.playlist.length) % this.state.playlist.length;
-    this.state.cursor = this.state.index;
-    const track = this.current();
+    if (moveCursor) this.state.cursor = this.state.index;
+    const track = this.state.playlist[this.state.index];
+    this.state.air = track ? { ...track } : null;
     this.state.songTitle = "";
     this.state.error = "";
     this.state.status = "buffering";
@@ -369,6 +371,7 @@ export class PlayerCore {
   stop() {
     this.icy.stop();
     this.engine.stop();
+    this.state.air = null;
     this.state.songTitle = "";
     this.state.playing = false;
     this.state.status = "stopped";
@@ -392,16 +395,25 @@ export class PlayerCore {
     this.broadcast();
   }
 
+  airIndex() {
+    const key = trackKey(this.state.air);
+    if (key) {
+      const found = this.state.playlist.findIndex((t) => trackKey(t) === key);
+      if (found >= 0) return found;
+    }
+    return this.state.index;
+  }
+
   async next({ autoSkip = false } = {}) {
     const n = this.state.playlist.length;
     if (!n) return;
-    await this.playIndex((this.state.index + 1) % n, { autoSkip });
+    await this.playIndex((this.airIndex() + 1) % n, { autoSkip });
   }
 
   async prev() {
     const n = this.state.playlist.length;
     if (!n) return;
-    await this.playIndex((this.state.index - 1 + n) % n);
+    await this.playIndex((this.airIndex() - 1 + n) % n);
   }
 
   setVolume(n) {
@@ -421,16 +433,17 @@ export class PlayerCore {
     const keep = !play && current && this.keepSession();
     if (keep) {
       const key = trackKey(current);
+      const cursorKey = trackKey(this.state.playlist[this.state.cursor]);
       const found = incoming.findIndex((t) => trackKey(t) === key);
       if (found >= 0) {
         this.state.playlist = incoming;
         this.state.index = found;
-        this.state.cursor = found;
       } else {
         this.state.playlist = [current, ...incoming];
         this.state.index = 0;
-        this.state.cursor = 0;
       }
+      const ci = cursorKey ? this.state.playlist.findIndex((t) => trackKey(t) === cursorKey) : -1;
+      this.state.cursor = ci >= 0 ? ci : Math.min(this.state.cursor, Math.max(0, this.state.playlist.length - 1));
       this.broadcast();
       this.persist();
       return;
@@ -476,7 +489,6 @@ export class PlayerCore {
     const playing = i === this.state.index;
     this.state.playlist = this.state.playlist.filter((_, idx) => idx !== i);
     if (!this.state.playlist.length) {
-      this.stop();
       this.state.index = 0;
       this.state.cursor = 0;
       this.broadcast();
@@ -484,11 +496,12 @@ export class PlayerCore {
       return;
     }
     if (this.state.index > i) this.state.index -= 1;
+    else if (playing) this.state.index = Math.min(i, this.state.playlist.length - 1);
     if (this.state.cursor > i) this.state.cursor -= 1;
+    else if (this.state.cursor === i) this.state.cursor = Math.min(i, this.state.playlist.length - 1);
     this.state.cursor = Math.min(this.state.cursor, this.state.playlist.length - 1);
     this.broadcast();
     this.persist();
-    if (playing) this.playIndex(this.state.index);
   }
 
   toggleFavorite(track = this.state.playlist[this.state.cursor]) {
@@ -514,9 +527,11 @@ export class PlayerCore {
     return this.setPlaylist(tracks, { play: !this.keepSession() });
   }
 
-  statePatch(partial) {
-    Object.assign(this.state, partial);
-    this.broadcast("status");
+  setCursor(i) {
+    const n = this.state.playlist.length;
+    if (!n) return;
+    this.state.cursor = Math.max(0, Math.min(n - 1, Math.round(Number(i) || 0)));
+    this.broadcast("cursor");
   }
 
   async command(name, ...args) {

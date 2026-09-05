@@ -34,12 +34,12 @@ Audio keeps playing in an offscreen document if you close the window.
 | --- | --- |
 | `Space` | Play / pause |
 | `Enter` | Play cursor |
-| `↑` / `↓` | Move index cursor |
-| `x` | Delete / hide station |
-| `m` | Note |
-| `R` / `H` / `N` / `n` | Stations / history / countries / fav |
+| `↑` / `↓` | Move cursor |
+| `F` / `M` / `X` | Fav / note / delete highlighted |
+| `Shift+F` / `T` / `H` / `C` / `I` | Fav / stations / history / countries / index |
 | `S` | Sleep 10 min |
-| `Esc` | Index |
+| `Esc` | Index / close |
+| `?` | Shortcuts |
 
 ## License
 

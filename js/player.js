@@ -1,5 +1,5 @@
 import { PlayerCore, isExtension, defaultState, SLEEP_PRESETS, FADE_MS, trackKey } from "./core.js";
-import { searchStations, stationsByCountry, featuredTracks, REGIONS } from "./radio.js";
+import { searchStations, stationsByCountry, REGIONS } from "./radio.js";
 import { attachEqVis } from "./eq-vis.js";
 
 class ExtensionBridge {
@@ -81,6 +81,7 @@ let countryStations = null;
 let countryLoading = false;
 let countryError = "";
 let countryCode = "";
+let browseCursor = 0;
 
 function toast(text) {
   toastEl.textContent = text;
@@ -91,13 +92,14 @@ function toast(text) {
 
 function closeOverlay() {
   overlay = null;
-  overlayEl.classList.remove("open");
+  overlayEl.classList.remove("open", "modal");
   overlayEl.innerHTML = "";
 }
 
 function openOverlay(next) {
   overlay = next;
   overlayEl.classList.add("open");
+  overlayEl.classList.toggle("modal", next.kind === "help");
   renderOverlay();
   const field = overlayEl.querySelector("input, textarea");
   if (field) field.focus();
@@ -134,23 +136,25 @@ function renderOverlay() {
   if (!overlay) return;
   const { kind, body } = overlay;
   if (kind === "help") {
-    overlayEl.innerHTML = `<h2>Keys</h2>
+    overlayEl.innerHTML = `<div class="modal-card" role="dialog" aria-label="Shortcuts">
+      <h2>Shortcuts</h2>
       <div class="keys">
         <span>Space</span><span>Play / pause</span>
-        <span>Enter</span><span>Play cursor</span>
-        <span>↑ ↓</span><span>Move list</span>
-        <span>x</span><span>Delete / hide</span>
-        <span>m</span><span>Note</span>
-        <span>f</span><span>Fav</span>
-        <span>R</span><span>Stations</span>
-        <span>H</span><span>History</span>
-        <span>N</span><span>Countries</span>
-        <span>n</span><span>Fav pane</span>
-        <span>Esc</span><span>Index</span>
-        <span>S</span><span>Sleep</span>
-        <span>?</span><span>This help</span>
+        <span>Enter</span><span>Play highlighted</span>
+        <span>↑ ↓</span><span>Move cursor</span>
+        <span>F</span><span>Fav highlighted</span>
+        <span>M</span><span>Note highlighted</span>
+        <span>X</span><span>Delete highlighted</span>
+        <span>Shift+F</span><span>Fav tab</span>
+        <span>Shift+T</span><span>Stations tab</span>
+        <span>Shift+H</span><span>History tab</span>
+        <span>Shift+C</span><span>Countries tab</span>
+        <span>Shift+I</span><span>Index tab</span>
+        <span>S</span><span>Sleep 10 min</span>
+        <span>Esc</span><span>Index / close</span>
       </div>
-      <div class="hint" style="margin-top:10px">Esc closes</div>`;
+      <div class="hint" style="margin-top:10px">Esc closes</div>
+    </div>`;
     return;
   }
   overlayEl.innerHTML = `<h2>Station note</h2>
@@ -202,6 +206,10 @@ attachEqVis(
 );
 
 client.subscribe((state, kind) => {
+  if (kind === "cursor") {
+    if (pane === "index") updatePlayingHighlight(state, { scroll: true });
+    return;
+  }
   if (kind === "time" || kind === "sleep" || kind === "meta" || kind === "status") {
     renderChrome(state);
     if (pane === "index") updatePlayingHighlight(state);
@@ -220,7 +228,7 @@ function statusCopy(state) {
 }
 
 function renderChrome(state) {
-  const track = state.playlist[state.index];
+  const track = state.air || state.playlist[state.index];
   const kicker = document.getElementById("now-kicker");
   kicker.textContent = statusCopy(state);
   kicker.classList.toggle("on-air", state.status === "playing" && state.live);
@@ -276,41 +284,46 @@ function renderSleepChips(state) {
 }
 
 function playingKey(state) {
-  return trackKey(state.playlist[state.index]);
+  return trackKey(state.air || state.playlist[state.index]);
 }
 
-function updatePlayingHighlight(state) {
+function updatePlayingHighlight(state, { scroll = false } = {}) {
+  const key = playingKey(state);
   listEl.querySelectorAll(".track").forEach((el) => {
     const i = Number(el.dataset.i);
-    el.classList.toggle("is-playing", i === state.index);
+    el.classList.toggle("is-playing", el.dataset.key === key);
     el.classList.toggle("is-cursor", i === state.cursor);
   });
-  listEl.querySelector(".track.is-cursor")?.scrollIntoView({ block: "nearest" });
+  if (scroll) listEl.querySelector(".track.is-cursor")?.scrollIntoView({ block: "nearest" });
 }
 
 function highlightPlayingKeys(state) {
   const key = playingKey(state);
   listEl.querySelectorAll(".track").forEach((el) => {
     el.classList.toggle("is-playing", el.dataset.key === key);
+    el.classList.toggle("is-cursor", Number(el.dataset.i) === browseCursor);
   });
 }
 
-function setPane(next) {
+function setPane(next, { focusSearch = false } = {}) {
   if (pane === next && next === "countries" && countryStations) {
     countryStations = null;
     countryCode = "";
     countryError = "";
+    browseCursor = 0;
     renderPane(client.state);
+    listEl.focus();
     return;
   }
   pane = next;
+  browseCursor = 0;
   if (pane === "countries") {
     countryStations = null;
     countryCode = "";
     countryError = "";
   }
   renderPane(client.state);
-  if (pane === "stations" || pane === "history") paneSearchEl.focus();
+  if (focusSearch && (pane === "stations" || pane === "history")) paneSearchEl.focus();
   else listEl.focus();
 }
 
@@ -341,7 +354,7 @@ function stationRow(t, i, { history = false, queue = false } = {}) {
   const memo = noteText(t);
   const fav = client.isFavorite(t);
   const playing = trackKey(t) === playingKey(client.state) ? "is-playing" : "";
-  const cur = queue && i === client.state.cursor ? "is-cursor" : "";
+  const cur = (queue ? i === client.state.cursor : i === browseCursor) ? "is-cursor" : "";
   const del = queue
     ? `<button type="button" class="mini hide" data-hide="${i}">DELETE</button>`
     : `<button type="button" class="mini hide" data-row-act="delete">DELETE</button>`;
@@ -364,10 +377,10 @@ function bindStationRows(tracks, { history = false, queue = false } = {}) {
       if (e.target.closest("[data-row-act],[data-hide],[data-fav],[data-memo]")) return;
       const i = Number(el.dataset.i);
       const track = tracks[i];
-      if (queue) client.command("playIndex", i);
+      if (queue) client.command("playIndex", i, { moveCursor: true });
       else if (track) {
         const qi = client.state.playlist.findIndex((t) => trackKey(t) === trackKey(track));
-        if (qi >= 0) client.command("playIndex", qi);
+        if (qi >= 0) client.command("playIndex", qi, { moveCursor: true });
         else playPicked(track);
       }
     });
@@ -533,7 +546,7 @@ function renderCountries() {
   }
   listEl.dataset.sig = "countries";
   listEl.innerHTML = REGIONS.map(
-    (r, i) => `<div class="track" data-i="${i}" data-code="${r.code}">
+    (r, i) => `<div class="track ${i === browseCursor ? "is-cursor" : ""}" data-i="${i}" data-code="${r.code}">
       <div>
         <div class="name">${escapeHtml(r.name)}</div>
         <div class="memo">${r.code}</div>
@@ -571,6 +584,94 @@ async function loadCountry(code) {
   }
 }
 
+function visibleTracks() {
+  if (pane === "index") return client.state.playlist;
+  if (pane === "fav") return client.state.favorites || [];
+  if (pane === "history") {
+    const q = historyQuery.trim().toLowerCase();
+    return historyItems().filter((t) => !q || historyHaystack(t).includes(q));
+  }
+  if (pane === "stations") return stationsQuery.trim() ? stationsItems : [];
+  if (pane === "countries" && countryStations) return countryStations;
+  return [];
+}
+
+function highlightedTrack() {
+  const tracks = visibleTracks();
+  const i = pane === "index" ? client.state.cursor : browseCursor;
+  return tracks[i] || null;
+}
+
+function moveBrowse(delta) {
+  const n = listEl.querySelectorAll(".track").length;
+  if (!n) return;
+  browseCursor = Math.max(0, Math.min(n - 1, browseCursor + delta));
+  listEl.querySelectorAll(".track").forEach((el) => {
+    el.classList.toggle("is-cursor", Number(el.dataset.i) === browseCursor);
+  });
+  listEl.querySelector(".track.is-cursor")?.scrollIntoView({ block: "nearest" });
+}
+
+function moveCursor(delta) {
+  if (pane === "index") {
+    const n = client.state.playlist.length;
+    if (!n) return;
+    client.command("setCursor", client.state.cursor + delta);
+    return;
+  }
+  moveBrowse(delta);
+}
+
+function activateHighlight() {
+  if (pane === "index") {
+    client.command("playIndex", client.state.cursor, { moveCursor: true });
+    return;
+  }
+  if (pane === "countries" && !countryStations) {
+    const row = REGIONS[browseCursor];
+    if (row) loadCountry(row.code);
+    return;
+  }
+  const track = highlightedTrack();
+  if (!track) return;
+  const qi = client.state.playlist.findIndex((t) => trackKey(t) === trackKey(track));
+  if (qi >= 0) client.command("playIndex", qi, { moveCursor: true });
+  else playPicked(track);
+}
+
+function favHighlight() {
+  const track = highlightedTrack();
+  if (!track) return;
+  client.command("toggleFavorite", track);
+  toast("Favorite updated");
+}
+
+function noteHighlight() {
+  const track = highlightedTrack();
+  if (track) openMemo(track);
+}
+
+function deleteHighlight() {
+  if (pane === "index") {
+    client.command("hideStation", client.state.cursor);
+    return;
+  }
+  const track = highlightedTrack();
+  if (!track) return;
+  if (pane === "history") {
+    client.command("removeHistory", track);
+    browseCursor = 0;
+    renderHistory();
+    return;
+  }
+  if (pane === "fav") {
+    client.command("toggleFavorite", track);
+    return;
+  }
+  const qi = client.state.playlist.findIndex((t) => trackKey(t) === trackKey(track));
+  if (qi >= 0) client.command("hideStation", qi);
+}
+
 function openMemo(track) {
   if (!track) return;
   openOverlay({ kind: "memo", track, body: noteText(track) });
@@ -593,7 +694,7 @@ function queueTracks(tracks) {
 
 document.getElementById("track-title").addEventListener("click", () => client.command("toggle"));
 document.getElementById("now-note").addEventListener("click", () => {
-  openMemo(client.state.playlist[client.state.index]);
+  openMemo(client.state.air || client.state.playlist[client.state.index]);
 });
 document.getElementById("btn-play").addEventListener("click", () => client.command("toggle"));
 document.getElementById("btn-prev").addEventListener("click", () => client.command("prev"));
@@ -617,7 +718,7 @@ document.querySelector(".now-card").addEventListener("click", (e) => {
 document.querySelector(".toolbar-btns").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-pane]");
   if (!btn) return;
-  setPane(btn.dataset.pane);
+  setPane(btn.dataset.pane, { focusSearch: true });
 });
 
 let searchTimer = 0;
@@ -635,6 +736,11 @@ paneSearchEl.addEventListener("input", () => {
     return;
   }
   searchTimer = setTimeout(() => searchStationsPane(q), 280);
+});
+
+document.getElementById("btn-help").addEventListener("click", () => openOverlay({ kind: "help" }));
+overlayEl.addEventListener("click", (e) => {
+  if (overlayEl.classList.contains("modal") && e.target === overlayEl) closeOverlay();
 });
 
 document.addEventListener("keydown", async (e) => {
@@ -665,7 +771,22 @@ document.addEventListener("keydown", async (e) => {
 
   if (typingInField()) return;
 
-  const s = client.state;
+  if (e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
+    const tabs = {
+      KeyF: "fav",
+      KeyT: "stations",
+      KeyH: "history",
+      KeyC: "countries",
+      KeyI: "index",
+    };
+    const next = tabs[e.code];
+    if (next) {
+      e.preventDefault();
+      setPane(next);
+      return;
+    }
+  }
+
   const key = e.key;
 
   if (key === "?") {
@@ -680,7 +801,7 @@ document.addEventListener("keydown", async (e) => {
   }
   if (key === "Enter") {
     e.preventDefault();
-    if (pane === "index") client.command("playIndex", s.cursor);
+    activateHighlight();
     return;
   }
   if (key === "s" && !e.shiftKey) {
@@ -689,12 +810,12 @@ document.addEventListener("keydown", async (e) => {
   }
   if (key === "ArrowDown") {
     e.preventDefault();
-    if (pane === "index") client.command("statePatch", { cursor: Math.min(s.playlist.length - 1, s.cursor + 1) });
+    moveCursor(1);
     return;
   }
   if (key === "ArrowUp") {
     e.preventDefault();
-    if (pane === "index") client.command("statePatch", { cursor: Math.max(0, s.cursor - 1) });
+    moveCursor(-1);
     return;
   }
   if (key === "ArrowRight") {
@@ -705,44 +826,23 @@ document.addEventListener("keydown", async (e) => {
     client.command("prev");
     return;
   }
-  if (key === "m") {
-    openMemo(s.playlist[s.cursor] || s.playlist[s.index]);
+  if (key === "m" || key === "M") {
+    e.preventDefault();
+    noteHighlight();
     return;
   }
-  if (key === "f") {
-    client.command("toggleFavorite", s.playlist[s.cursor]);
-    toast("Favorite updated");
+  if ((key === "f" || key === "F") && !e.shiftKey) {
+    e.preventDefault();
+    favHighlight();
     return;
   }
   if (key === "S") {
     client.command("setSleepTimer", 10);
     return;
   }
-  if (key === "R") {
+  if (key === "x" || key === "X" || key === "Delete") {
     e.preventDefault();
-    setPane("stations");
+    deleteHighlight();
     return;
-  }
-  if (key === "H") {
-    e.preventDefault();
-    setPane("history");
-    return;
-  }
-  if (key === "N") {
-    setPane("countries");
-    return;
-  }
-  if (key === "n") {
-    setPane("fav");
-    return;
-  }
-  if (key === "x") {
-    if (pane === "index") client.command("hideStation", s.cursor);
-    return;
-  }
-  if (key === "1" && !e.ctrlKey) {
-    setPane("index");
-    client.command("setPlaylist", featuredTracks());
-    toast("Featured");
   }
 });

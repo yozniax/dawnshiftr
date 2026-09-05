@@ -71,7 +71,32 @@ button, input, textarea {
   font-weight: 700;
 }
 
-.top-meta,
+.top-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.help-btn {
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line);
+  background: var(--bg-elev);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: none;
+  font-size: 13px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.help-btn:hover { color: var(--accent); border-color: var(--accent); }
+
 #now-kicker {
   color: var(--muted);
   font-size: 11px;
@@ -105,15 +130,16 @@ button, input, textarea {
   margin: 2px 0 0;
   color: var(--accent);
   font-size: 12px;
-  min-height: 1.2em;
-  line-height: 1.2;
+  height: 15px;
+  min-height: 15px;
+  max-height: 15px;
+  line-height: 15px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .song.empty {
-  color: transparent;
   visibility: hidden;
 }
 
@@ -171,11 +197,9 @@ button, input, textarea {
 .vol {
   display: flex;
   align-items: center;
-  gap: 4px;
-  width: 84px;
-  flex: 0 0 84px;
-  color: var(--muted);
-  font-size: 11px;
+  width: 148px;
+  flex: 0 0 148px;
+  min-width: 0;
 }
 
 .vol input { flex: 1; accent-color: var(--accent); min-width: 0; width: 100%; }
@@ -402,6 +426,26 @@ button, input, textarea {
 
 .overlay.open { display: flex; }
 
+.overlay.modal {
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(0, 0, 0, 0.72);
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.overlay.modal .modal-card {
+  width: min(440px, 100%);
+  max-height: min(80vh, 560px);
+  overflow: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 14px 16px 16px;
+}
+
 .overlay h2 {
   margin: 0 0 4px;
   font-size: 14px;
@@ -499,7 +543,7 @@ button, input, textarea {
   font-size: 12px;
 }
 
-.keys span:first-child { color: var(--accent); }
+.keys span:nth-child(odd) { color: var(--accent); }
 
 .toast {
   position: fixed;
