@@ -120,7 +120,7 @@ chrome.windows.onRemoved.addListener((id) => {
   if (id === playerWindowId) playerWindowId = null;
 });
 
-chrome.runtime.onInstalled.addListener(() => {
+function setupContextMenus() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: "open-window", title: "Open DAWNSHIFTr window", contexts: ["action"] });
     chrome.contextMenus.create({ id: "open-tab", title: "Open DAWNSHIFTr in tab", contexts: ["action"] });
@@ -133,6 +133,16 @@ chrome.runtime.onInstalled.addListener(() => {
       documentUrlPatterns: ["*://*.youtube.com/*", "*://youtu.be/*", "*://*.youtube-nocookie.com/*", "*://music.youtube.com/*"],
     });
   });
+}
+
+chrome.runtime.onInstalled.addListener((details) => {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
+  setupContextMenus();
+  if (details.reason === "install") openPlayerWindow();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
 });
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {

@@ -1,0 +1,7 @@
+Name: DAWNSHIFTr
+Summary: Bedside internet radio. Station notes, sleep timer, live titles, and play the current YouTube tab.
+Category: Entertainment
+Language: English
+Privacy policy: https://github.com/yozniax/dawnshiftr/blob/main/privacy.html
+Homepage: https://github.com/yozniax/dawnshiftr
+Support: https://github.com/yozniax/dawnshiftr/issues

@@ -16,12 +16,22 @@ npm test
 
 ## Chrome extension
 
+Load unpacked:
+
 1. `chrome://extensions`
 2. Developer mode on
-3. Load unpacked → this folder
+3. Load unpacked → this folder (the one with `manifest.json`)
 4. Click the toolbar icon for a small player window. If a YouTube tab is open, that video starts in DAWNSHIFTr so you can set a sleep timer.
 
 Audio keeps playing in an offscreen document if you close the window.
+
+Chrome Web Store zip:
+
+```sh
+npm run pack
+```
+
+Upload `dist/dawnshiftr-chrome.zip` from the [Developer Dashboard](https://chrome.google.com/webstore/devconsole). Listing copy, privacy URL, screenshots, and permission notes: `store/CHROME.md`.
 
 ## Features
 
