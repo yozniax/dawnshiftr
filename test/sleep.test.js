@@ -24,7 +24,7 @@ test("other sleeps fade in the last 15 seconds", () => {
 });
 
 test("sleep clock copy", () => {
-  assert.equal(sleepClock({}).text, "SLEEP");
+  assert.equal(sleepClock({}).text, "SLEEP IN");
   const pt = sleepClock({ sleepEndsAt: Date.now() + 60_000, sleepMinutes: 25, sleepRemainingMs: 61_000 });
   assert.match(pt.text, /^POMODORO ENDS AT 01:01$/);
   assert.equal(pt.fading, false);

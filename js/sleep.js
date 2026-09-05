@@ -33,7 +33,7 @@ export function sleepClock(state) {
     ? state.sleepRemainingMs ?? Math.max(0, state.sleepEndsAt - Date.now())
     : 0;
   if (!state?.sleepEndsAt) {
-    return { text: "SLEEP", counting: false, fading: false, remaining };
+    return { text: "SLEEP IN", counting: false, fading: false, remaining };
   }
   const pt = isPomodoro(state.sleepMinutes);
   const remain = formatSleepRemain(remaining);
