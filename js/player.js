@@ -115,6 +115,18 @@ function noteText(track) {
   return client.noteFor(track)?.text || "";
 }
 
+function typingInField() {
+  const el = document.activeElement;
+  if (!el) return false;
+  const tag = el.tagName;
+  if (tag === "TEXTAREA") return true;
+  if (tag === "INPUT") {
+    const type = String(el.getAttribute("type") || "text").toLowerCase();
+    return !["button", "submit", "checkbox", "radio", "file", "range", "color", "hidden"].includes(type);
+  }
+  return Boolean(el.isContentEditable);
+}
+
 function renderOverlay() {
   if (!overlay) return;
   const { kind, title, hint, query = "", body } = overlay;
@@ -130,6 +142,7 @@ function renderOverlay() {
         <span>R</span><span>Tune</span>
         <span>N</span><span>Country</span>
         <span>S</span><span>Sleep</span>
+        <span>Shift+Enter</span><span>Append from Tune</span>
         <span>?</span><span>This help</span>
       </div>
       <div class="hint" style="margin-top:10px">Esc closes</div>`;
@@ -427,7 +440,7 @@ function openRadio(seed = "") {
   openOverlay({
     kind: "radio",
     title: "Tune",
-    hint: "Enter to play · a appends (outside the search box). Notes show under known stations.",
+    hint: "Enter to play · Shift+Enter appends. Notes show under known stations.",
     query: seed,
     items: [],
     cursor: 0,
@@ -643,29 +656,31 @@ document.addEventListener("keydown", async (e) => {
       e.preventDefault();
       overlay.cursor = Math.min((overlay.items?.length || 1) - 1, (overlay.cursor || 0) + 1);
       renderOverlayResults();
+      return;
     }
     if (e.key === "ArrowUp") {
       e.preventDefault();
       overlay.cursor = Math.max(0, (overlay.cursor || 0) - 1);
       renderOverlayResults();
+      return;
     }
-    if (e.key === "Enter") {
-      e.preventDefault();
-      await activateOverlay();
-    }
-    const typing = e.target instanceof HTMLElement && (e.target.closest("input, textarea") || e.target.isContentEditable);
-    if (e.key === "a" && !typing && overlay.kind === "radio" && overlay.items?.[overlay.cursor]) {
+    if (e.key === "Enter" && e.shiftKey && overlay.kind === "radio" && overlay.items?.[overlay.cursor]) {
       e.preventDefault();
       const t = overlay.items[overlay.cursor].track;
       client.command("unhideKey", trackKey(t));
       await client.command("appendTracks", [t]);
       toast("Added");
+      return;
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      await activateOverlay();
+      return;
     }
     return;
   }
 
-  const tag = document.activeElement?.tagName;
-  if (tag === "INPUT" || tag === "TEXTAREA") return;
+  if (typingInField()) return;
 
   const s = client.state;
   const key = e.key;
