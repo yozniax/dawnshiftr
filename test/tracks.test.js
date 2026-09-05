@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mergeTracks, toggleFavoriteList, trackHaystack, trackKey } from "../js/tracks.js";
+import { mergeTracks, toggleFavoriteList, trackHaystack, trackKey, tracksForPane, scrollChildIntoContainer } from "../js/tracks.js";
 
 test("trackKey prefers id", () => {
   assert.equal(trackKey({ id: "a", url: "http://x" }), "a");
@@ -28,4 +28,23 @@ test("mergeTracks keeps first copy", () => {
 
 test("haystack includes notes", () => {
   assert.match(trackHaystack({ title: "Soma", tags: "chill" }, "night work"), /night work/);
+});
+
+test("stations pane keeps popular rows even without a search", () => {
+  const popular = [{ id: "1" }, { id: "2" }];
+  assert.equal(tracksForPane("stations", { stations: popular }).length, 2);
+  assert.equal(tracksForPane("history", { history: [{ id: "h" }] }).length, 1);
+});
+
+test("scrollChildIntoContainer only moves the list scrollTop", () => {
+  const container = {
+    scrollTop: 80,
+    getBoundingClientRect: () => ({ top: 200, bottom: 400 }),
+  };
+  const below = { getBoundingClientRect: () => ({ top: 420, bottom: 450 }) };
+  scrollChildIntoContainer(container, below);
+  assert.equal(container.scrollTop, 130);
+  const above = { getBoundingClientRect: () => ({ top: 160, bottom: 190 }) };
+  scrollChildIntoContainer(container, above);
+  assert.equal(container.scrollTop, 90);
 });

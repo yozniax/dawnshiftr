@@ -29,3 +29,19 @@ export function toggleFavoriteList(favorites, track) {
 export function trackHaystack(t, note = "") {
   return [t?.title, t?.country, t?.tags, note].filter(Boolean).join(" ").toLowerCase();
 }
+
+export function tracksForPane(pane, { stations = [], favorites = [], history = [], countries = [] } = {}) {
+  if (pane === "stations") return stations;
+  if (pane === "fav") return favorites;
+  if (pane === "history") return history;
+  if (pane === "countries") return countries;
+  return [];
+}
+
+export function scrollChildIntoContainer(container, child) {
+  if (!container || !child) return;
+  const box = container.getBoundingClientRect();
+  const row = child.getBoundingClientRect();
+  if (row.top < box.top) container.scrollTop += row.top - box.top;
+  else if (row.bottom > box.bottom) container.scrollTop += row.bottom - box.bottom;
+}

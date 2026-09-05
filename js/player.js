@@ -3,7 +3,7 @@ import { searchStations, stationsByCountry, popularStations, POPULAR_HEADING, PO
 import { attachEqVis } from "./eq-vis.js";
 import { isEnabled, setEnabled } from "./telemetry.js";
 import { sleepClock, isPomodoro } from "./sleep.js";
-import { mergeTracks, trackHaystack as haystackOf } from "./tracks.js";
+import { mergeTracks, trackHaystack as haystackOf, tracksForPane, scrollChildIntoContainer } from "./tracks.js";
 
 class ExtensionBridge {
   constructor() {
@@ -214,7 +214,7 @@ const client = isExtension() ? new ExtensionBridge() : wrapLocal(localCore);
 if (!isExtension()) {
   Promise.resolve(localCore.hydrate()).then(() => {
     listEl.focus();
-    listEl.querySelector(".track.is-cursor")?.scrollIntoView({ block: "nearest" });
+    scrollChildIntoContainer(listEl, listEl.querySelector(".track.is-cursor"));
   });
 } else {
   listEl.focus();
@@ -703,9 +703,9 @@ function visibleTracks() {
     const q = historyQuery.trim().toLowerCase();
     return historyItems().filter((t) => !q || trackHaystack(t).includes(q));
   }
-  if (pane === "stations") return stationsQuery.trim() ? stationsItems : [];
+  if (pane === "stations") return stationsItems;
   if (pane === "countries" && countryStations) return countryStationList();
-  return [];
+  return tracksForPane(pane, {});
 }
 
 function highlightedTrack() {
@@ -720,7 +720,7 @@ function moveBrowse(delta) {
   listEl.querySelectorAll(".track").forEach((el) => {
     el.classList.toggle("is-cursor", Number(el.dataset.i) === browseCursor);
   });
-  listEl.querySelector(".track.is-cursor")?.scrollIntoView({ block: "nearest" });
+  scrollChildIntoContainer(listEl, listEl.querySelector(".track.is-cursor"));
 }
 
 function moveCursor(delta) {
@@ -738,6 +738,7 @@ function activateHighlight() {
   const qi = client.state.playlist.findIndex((t) => trackKey(t) === trackKey(track));
   if (qi >= 0) client.command("playIndex", qi, { moveCursor: true });
   else playPicked(track);
+  listEl.focus();
 }
 
 function favHighlight() {
