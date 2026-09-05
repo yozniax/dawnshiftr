@@ -10,7 +10,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "DAWNSHIFTr",
+    "default_title": "DAWNSHIFTr — YouTube tab plays here",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -33,8 +33,13 @@
     "declarativeNetRequest",
     "contextMenus",
     "commands",
-    "alarms"
+    "alarms",
+    "tabs",
+    "activeTab"
   ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com https://music.youtube.com"
+  },
   "host_permissions": ["<all_urls>"],
   "declarative_net_request": {
     "rule_resources": [

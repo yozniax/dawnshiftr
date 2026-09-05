@@ -1,3 +1,5 @@
+import { parseYouTubeUrl } from "./js/youtube.js";
+
 const OFFSCREEN_URL = "offscreen.html";
 const PLAYER_URL = "player.html?surface=window";
 
@@ -55,6 +57,35 @@ async function openPlayerWindow() {
   playerWindowId = win?.id ?? null;
 }
 
+function youtubeFromTab(tab) {
+  const parsed = parseYouTubeUrl(tab?.url || "");
+  if (!parsed) return null;
+  return { ...parsed, title: tab.title || "YouTube", url: tab.url };
+}
+
+async function findYouTubeTab(clickedTab) {
+  const direct = youtubeFromTab(clickedTab);
+  if (direct) return direct;
+  const windows = await chrome.tabs.query({ currentWindow: true });
+  for (const tab of windows) {
+    const hit = youtubeFromTab(tab);
+    if (hit) return hit;
+  }
+  const all = await chrome.tabs.query({});
+  for (const tab of all) {
+    const hit = youtubeFromTab(tab);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+async function playYouTubeTab(tab) {
+  await ensureOffscreen();
+  const yt = await findYouTubeTab(tab);
+  if (yt) sendToOffscreen({ type: "cmd", name: "playYouTube", args: [yt] });
+  return Boolean(yt);
+}
+
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === "offscreen") {
     offscreenPort = port;
@@ -80,8 +111,8 @@ chrome.runtime.onConnect.addListener((port) => {
   }
 });
 
-chrome.action.onClicked.addListener(() => {
-  ensureOffscreen().catch(() => {});
+chrome.action.onClicked.addListener(async (tab) => {
+  await playYouTubeTab(tab);
   openPlayerWindow();
 });
 
@@ -94,6 +125,13 @@ chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({ id: "open-window", title: "Open DAWNSHIFTr window", contexts: ["action"] });
     chrome.contextMenus.create({ id: "open-tab", title: "Open DAWNSHIFTr in tab", contexts: ["action"] });
     chrome.contextMenus.create({ id: "open-side", title: "Open side panel", contexts: ["action"] });
+    chrome.contextMenus.create({ id: "play-youtube", title: "Play YouTube tab in DAWNSHIFTr", contexts: ["action"] });
+    chrome.contextMenus.create({
+      id: "play-youtube-page",
+      title: "Play this tab in DAWNSHIFTr",
+      contexts: ["page"],
+      documentUrlPatterns: ["*://*.youtube.com/*", "*://youtu.be/*", "*://*.youtube-nocookie.com/*", "*://music.youtube.com/*"],
+    });
   });
 });
 
@@ -107,6 +145,10 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === "open-side") {
     const windowId = tab?.windowId ?? (await chrome.windows.getCurrent()).id;
     await chrome.sidePanel.open({ windowId });
+  }
+  if (info.menuItemId === "play-youtube" || info.menuItemId === "play-youtube-page") {
+    await playYouTubeTab(tab);
+    openPlayerWindow();
   }
 });
 

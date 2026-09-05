@@ -70,13 +70,15 @@ const paneSearchEl = document.getElementById("pane-search");
 let overlay = null;
 let toastTimer = 0;
 let analyserBins = null;
-let pane = "index";
+let pane = "fav";
 let stationsQuery = "";
 let stationsItems = [];
 let stationsLoading = false;
 let stationsError = "";
 let stationsSeq = 0;
 let historyQuery = "";
+let favQuery = "";
+let countryQuery = "";
 let countryStations = null;
 let countryLoading = false;
 let countryError = "";
@@ -149,9 +151,8 @@ function renderOverlay() {
         <span>Shift+T</span><span>Stations tab</span>
         <span>Shift+H</span><span>History tab</span>
         <span>Shift+C</span><span>Countries tab</span>
-        <span>Shift+I</span><span>Index tab</span>
         <span>S</span><span>Sleep 10 min</span>
-        <span>Esc</span><span>Index / close</span>
+        <span>Esc</span><span>Fav / close</span>
       </div>
       <div class="hint" style="margin-top:10px">Esc closes</div>
     </div>`;
@@ -207,22 +208,25 @@ attachEqVis(
 
 client.subscribe((state, kind) => {
   if (kind === "cursor") {
-    if (pane === "index") updatePlayingHighlight(state, { scroll: true });
+    highlightPlayingKeys(state);
     return;
   }
   if (kind === "time" || kind === "sleep" || kind === "meta" || kind === "status") {
     renderChrome(state);
-    if (pane === "index") updatePlayingHighlight(state);
-    else highlightPlayingKeys(state);
+    highlightPlayingKeys(state);
     return;
   }
   render(state);
 });
 
 function statusCopy(state) {
+  const track = state.air || state.playlist[state.index];
   if (state.status === "error") return `ERROR: ${state.error || "CAN'T PLAY"}`;
   if (state.status === "buffering") return "TUNING…";
-  if (state.status === "playing") return state.live ? "ON AIR" : "PLAYING";
+  if (state.status === "playing") {
+    if (track?.kind === "youtube") return "YOUTUBE";
+    return state.live ? "ON AIR" : "PLAYING";
+  }
   if (state.status === "paused") return "PAUSED";
   return "STOPPED";
 }
@@ -287,16 +291,6 @@ function playingKey(state) {
   return trackKey(state.air || state.playlist[state.index]);
 }
 
-function updatePlayingHighlight(state, { scroll = false } = {}) {
-  const key = playingKey(state);
-  listEl.querySelectorAll(".track").forEach((el) => {
-    const i = Number(el.dataset.i);
-    el.classList.toggle("is-playing", el.dataset.key === key);
-    el.classList.toggle("is-cursor", i === state.cursor);
-  });
-  if (scroll) listEl.querySelector(".track.is-cursor")?.scrollIntoView({ block: "nearest" });
-}
-
 function highlightPlayingKeys(state) {
   const key = playingKey(state);
   listEl.querySelectorAll(".track").forEach((el) => {
@@ -310,6 +304,7 @@ function setPane(next, { focusSearch = false } = {}) {
     countryStations = null;
     countryCode = "";
     countryError = "";
+    countryQuery = "";
     browseCursor = 0;
     renderPane(client.state);
     listEl.focus();
@@ -323,7 +318,7 @@ function setPane(next, { focusSearch = false } = {}) {
     countryError = "";
   }
   renderPane(client.state);
-  if (focusSearch && (pane === "stations" || pane === "history")) paneSearchEl.focus();
+  if (focusSearch && (pane === "stations" || pane === "history" || pane === "fav" || pane === "countries")) paneSearchEl.focus();
   else listEl.focus();
 }
 
@@ -331,8 +326,7 @@ function renderPane(state) {
   document.querySelectorAll("[data-pane]").forEach((btn) => {
     btn.classList.toggle("on", btn.dataset.pane === pane);
   });
-  const searchable = pane === "stations" || pane === "history";
-  paneSearchEl.hidden = !searchable;
+  paneSearchEl.hidden = false;
   if (pane === "stations") {
     paneSearchEl.placeholder = "SEARCH STATIONS…";
     if (paneSearchEl.value !== stationsQuery) paneSearchEl.value = stationsQuery;
@@ -341,23 +335,63 @@ function renderPane(state) {
     paneSearchEl.placeholder = "SEARCH HISTORY…";
     if (paneSearchEl.value !== historyQuery) paneSearchEl.value = historyQuery;
     renderHistory();
-  } else if (pane === "countries") renderCountries();
-  else if (pane === "fav") renderFav(state);
-  else renderIndex(state);
+  } else if (pane === "countries") {
+    paneSearchEl.placeholder = countryStations ? "SEARCH STATIONS…" : "SEARCH COUNTRIES…";
+    if (paneSearchEl.value !== countryQuery) paneSearchEl.value = countryQuery;
+    renderCountries();
+  } else {
+    paneSearchEl.placeholder = "SEARCH FAV…";
+    if (paneSearchEl.value !== favQuery) paneSearchEl.value = favQuery;
+    renderFav(state);
+  }
 }
 
-function listSignature(state) {
-  return state.playlist.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n");
+function trackHaystack(t) {
+  return [t.title, t.country, t.tags, noteText(t)].filter(Boolean).join(" ").toLowerCase();
 }
 
-function stationRow(t, i, { history = false, queue = false } = {}) {
+function localCatalog() {
+  const seen = new Set();
+  const out = [];
+  const add = (t) => {
+    if (!t) return;
+    const k = trackKey(t);
+    if (!k || seen.has(k)) return;
+    seen.add(k);
+    out.push(t);
+  };
+  for (const t of client.state.playlist || []) add(t);
+  for (const t of client.state.favorites || []) add(t);
+  for (const t of client.state.history || []) add(t);
+  for (const n of Object.values(client.state.notes || {})) {
+    add({
+      id: n.id,
+      title: n.title || n.url || "Station",
+      url: n.url,
+      kind: n.kind || "radio",
+    });
+  }
+  return out;
+}
+
+function mergeTracks(primary, extra) {
+  const seen = new Set(primary.map(trackKey).filter(Boolean));
+  const out = [...primary];
+  for (const t of extra) {
+    const k = trackKey(t);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(t);
+  }
+  return out;
+}
+
+function stationRow(t, i, { history = false } = {}) {
   const memo = noteText(t);
   const fav = client.isFavorite(t);
   const playing = trackKey(t) === playingKey(client.state) ? "is-playing" : "";
-  const cur = (queue ? i === client.state.cursor : i === browseCursor) ? "is-cursor" : "";
-  const del = queue
-    ? `<button type="button" class="mini hide" data-hide="${i}">DELETE</button>`
-    : `<button type="button" class="mini hide" data-row-act="delete">DELETE</button>`;
+  const cur = i === browseCursor ? "is-cursor" : "";
+  const del = `<button type="button" class="mini hide" data-row-act="delete">DELETE</button>`;
   return `<div class="track ${playing} ${cur}" data-i="${i}" data-key="${escapeAttr(trackKey(t))}">
     <div>
       <div class="name">${escapeHtml(t.title)}</div>
@@ -371,18 +405,16 @@ function stationRow(t, i, { history = false, queue = false } = {}) {
   </div>`;
 }
 
-function bindStationRows(tracks, { history = false, queue = false } = {}) {
+function bindStationRows(tracks, { history = false } = {}) {
   listEl.querySelectorAll(".track").forEach((el) => {
     el.addEventListener("click", (e) => {
       if (e.target.closest("[data-row-act],[data-hide],[data-fav],[data-memo]")) return;
       const i = Number(el.dataset.i);
       const track = tracks[i];
-      if (queue) client.command("playIndex", i, { moveCursor: true });
-      else if (track) {
-        const qi = client.state.playlist.findIndex((t) => trackKey(t) === trackKey(track));
-        if (qi >= 0) client.command("playIndex", qi, { moveCursor: true });
-        else playPicked(track);
-      }
+      if (!track) return;
+      const qi = client.state.playlist.findIndex((t) => trackKey(t) === trackKey(track));
+      if (qi >= 0) client.command("playIndex", qi, { moveCursor: true });
+      else playPicked(track);
     });
   });
   listEl.querySelectorAll("[data-row-act]").forEach((btn) => {
@@ -415,31 +447,22 @@ function bindStationRows(tracks, { history = false, queue = false } = {}) {
   });
 }
 
-function renderIndex(state) {
-  const sig = `index\n${listSignature(state)}`;
-  if (listEl.dataset.sig === sig && listEl.querySelector(".track")) {
-    updatePlayingHighlight(state);
-    return;
-  }
-  listEl.dataset.sig = sig;
-  const hiddenN = state.hidden?.length || 0;
-  if (!state.playlist.length) {
-    listEl.innerHTML = `<div class="empty">No stations.
-      ${hiddenN ? `<div><button type="button" id="unhide-all">Show ${hiddenN} hidden</button></div>` : "Stations or countries."}</div>`;
-    document.getElementById("unhide-all")?.addEventListener("click", () => client.command("unhideAll"));
-    return;
-  }
-  listEl.innerHTML = state.playlist.map((t, i) => stationRow(t, i, { queue: true })).join("");
-  bindStationRows(state.playlist, { queue: true });
-  listEl.querySelector(".track.is-cursor")?.scrollIntoView({ block: "nearest" });
+function favTracks() {
+  const q = favQuery.trim().toLowerCase();
+  return (client.state.favorites || []).filter((t) => !q || trackHaystack(t).includes(q));
 }
 
 function renderFav(state) {
-  const tracks = state.favorites || [];
-  const sig = `fav\n${tracks.map((t) => `${trackKey(t)}\u0001${noteText(t)}`).join("\n")}`;
+  const tracks = favTracks();
+  const all = state.favorites || [];
+  const sig = `fav\n${favQuery}\n${tracks.map((t) => `${trackKey(t)}\u0001${noteText(t)}`).join("\n")}`;
   listEl.dataset.sig = sig;
-  if (!tracks.length) {
+  if (!all.length) {
     listEl.innerHTML = `<div class="empty">No favorites yet.</div>`;
+    return;
+  }
+  if (!tracks.length) {
+    listEl.innerHTML = `<div class="empty">NO MATCH.</div>`;
     return;
   }
   listEl.innerHTML = tracks.map((t, i) => stationRow(t, i)).join("");
@@ -448,10 +471,6 @@ function renderFav(state) {
 
 function historyItems() {
   return (client.state.history || []).map((t) => t);
-}
-
-function historyHaystack(t) {
-  return [t.title, t.country, noteText(t)].filter(Boolean).join(" ").toLowerCase();
 }
 
 function renderStations() {
@@ -491,11 +510,19 @@ async function searchStationsPane(q) {
   stationsLoading = true;
   if (pane === "stations") renderStations();
   try {
-    const tracks = await searchStations({ name: text, limit: 50 });
+    const needle = text.toLowerCase();
+    const localHits = localCatalog().filter((t) => trackHaystack(t).includes(needle));
+    let remote = [];
+    let remoteErr = "";
+    try {
+      remote = await searchStations({ name: text, limit: 50 });
+    } catch (err) {
+      remoteErr = err.message || "search failed";
+    }
     if (seq !== stationsSeq) return;
     stationsLoading = false;
-    stationsError = "";
-    stationsItems = tracks;
+    stationsItems = mergeTracks(localHits, remote);
+    stationsError = stationsItems.length ? "" : remoteErr;
     if (pane === "stations") renderStations();
   } catch (err) {
     if (seq !== stationsSeq) return;
@@ -507,7 +534,7 @@ async function searchStationsPane(q) {
 
 function renderHistory() {
   const q = historyQuery.trim().toLowerCase();
-  const tracks = historyItems().filter((t) => !q || historyHaystack(t).includes(q));
+  const tracks = historyItems().filter((t) => !q || trackHaystack(t).includes(q));
   const sig = `history\n${q}\n${tracks.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")}`;
   listEl.dataset.sig = sig;
   if (!historyItems().length) {
@@ -522,6 +549,16 @@ function renderHistory() {
   bindStationRows(tracks, { history: true });
 }
 
+function filteredRegions() {
+  const q = countryQuery.trim().toLowerCase();
+  return REGIONS.filter((r) => !q || `${r.name} ${r.code}`.toLowerCase().includes(q));
+}
+
+function countryStationList() {
+  const q = countryQuery.trim().toLowerCase();
+  return (countryStations || []).filter((t) => !q || trackHaystack(t).includes(q));
+}
+
 function renderCountries() {
   if (countryLoading) {
     listEl.dataset.sig = "countries-loading";
@@ -534,18 +571,28 @@ function renderCountries() {
     return;
   }
   if (countryStations) {
-    const sig = `countries\n${countryCode}\n${countryStations.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")}`;
+    const tracks = countryStationList();
+    const sig = `countries\n${countryCode}\n${countryQuery}\n${tracks.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")}`;
     listEl.dataset.sig = sig;
     if (!countryStations.length) {
       listEl.innerHTML = `<div class="empty">No stations.</div>`;
       return;
     }
-    listEl.innerHTML = countryStations.map((t, i) => stationRow(t, i)).join("");
-    bindStationRows(countryStations);
+    if (!tracks.length) {
+      listEl.innerHTML = `<div class="empty">NO MATCH.</div>`;
+      return;
+    }
+    listEl.innerHTML = tracks.map((t, i) => stationRow(t, i)).join("");
+    bindStationRows(tracks);
     return;
   }
-  listEl.dataset.sig = "countries";
-  listEl.innerHTML = REGIONS.map(
+  const regions = filteredRegions();
+  listEl.dataset.sig = `countries\n${countryQuery}`;
+  if (!regions.length) {
+    listEl.innerHTML = `<div class="empty">NO MATCH.</div>`;
+    return;
+  }
+  listEl.innerHTML = regions.map(
     (r, i) => `<div class="track ${i === browseCursor ? "is-cursor" : ""}" data-i="${i}" data-code="${r.code}">
       <div>
         <div class="name">${escapeHtml(r.name)}</div>
@@ -562,6 +609,8 @@ async function loadCountry(code) {
   countryLoading = true;
   countryError = "";
   countryCode = code;
+  countryQuery = "";
+  browseCursor = 0;
   renderCountries();
   try {
     const tracks = await stationsByCountry(code, 60);
@@ -573,9 +622,7 @@ async function loadCountry(code) {
       return;
     }
     countryStations = tracks;
-    const keep = isTuned();
-    await queueTracks(tracks);
-    toast(keep ? `${code} · still playing` : `${code} · ${tracks.length}`);
+    toast(`${code} · ${tracks.length}`);
     renderCountries();
   } catch (err) {
     countryLoading = false;
@@ -585,21 +632,19 @@ async function loadCountry(code) {
 }
 
 function visibleTracks() {
-  if (pane === "index") return client.state.playlist;
-  if (pane === "fav") return client.state.favorites || [];
+  if (pane === "fav") return favTracks();
   if (pane === "history") {
     const q = historyQuery.trim().toLowerCase();
-    return historyItems().filter((t) => !q || historyHaystack(t).includes(q));
+    return historyItems().filter((t) => !q || trackHaystack(t).includes(q));
   }
   if (pane === "stations") return stationsQuery.trim() ? stationsItems : [];
-  if (pane === "countries" && countryStations) return countryStations;
+  if (pane === "countries" && countryStations) return countryStationList();
   return [];
 }
 
 function highlightedTrack() {
   const tracks = visibleTracks();
-  const i = pane === "index" ? client.state.cursor : browseCursor;
-  return tracks[i] || null;
+  return tracks[browseCursor] || null;
 }
 
 function moveBrowse(delta) {
@@ -613,22 +658,12 @@ function moveBrowse(delta) {
 }
 
 function moveCursor(delta) {
-  if (pane === "index") {
-    const n = client.state.playlist.length;
-    if (!n) return;
-    client.command("setCursor", client.state.cursor + delta);
-    return;
-  }
   moveBrowse(delta);
 }
 
 function activateHighlight() {
-  if (pane === "index") {
-    client.command("playIndex", client.state.cursor, { moveCursor: true });
-    return;
-  }
   if (pane === "countries" && !countryStations) {
-    const row = REGIONS[browseCursor];
+    const row = filteredRegions()[browseCursor];
     if (row) loadCountry(row.code);
     return;
   }
@@ -652,10 +687,6 @@ function noteHighlight() {
 }
 
 function deleteHighlight() {
-  if (pane === "index") {
-    client.command("hideStation", client.state.cursor);
-    return;
-  }
   const track = highlightedTrack();
   if (!track) return;
   if (pane === "history") {
@@ -677,19 +708,10 @@ function openMemo(track) {
   openOverlay({ kind: "memo", track, body: noteText(track) });
 }
 
-function isTuned() {
-  return ["playing", "buffering", "paused"].includes(client.state.status);
-}
-
 function playPicked(track) {
   client.command("unhideKey", trackKey(track));
   client.command("unlock");
   return client.command("setPlaylist", [track, ...client.state.playlist.filter((t) => t.url !== track.url)]);
-}
-
-function queueTracks(tracks) {
-  const keep = isTuned();
-  return client.command("setPlaylist", tracks, { play: !keep });
 }
 
 document.getElementById("track-title").addEventListener("click", () => client.command("toggle"));
@@ -725,9 +747,20 @@ let searchTimer = 0;
 paneSearchEl.addEventListener("input", () => {
   clearTimeout(searchTimer);
   const q = paneSearchEl.value;
+  browseCursor = 0;
   if (pane === "history") {
     historyQuery = q;
     renderHistory();
+    return;
+  }
+  if (pane === "fav") {
+    favQuery = q;
+    renderFav(client.state);
+    return;
+  }
+  if (pane === "countries") {
+    countryQuery = q;
+    renderCountries();
     return;
   }
   if (pane !== "stations") return;
@@ -763,10 +796,23 @@ document.addEventListener("keydown", async (e) => {
     return;
   }
 
-  if (e.key === "Escape" && pane !== "index") {
-    e.preventDefault();
-    setPane("index");
-    return;
+  if (e.key === "Escape") {
+    if (pane === "countries" && countryStations) {
+      e.preventDefault();
+      countryStations = null;
+      countryCode = "";
+      countryError = "";
+      countryQuery = "";
+      browseCursor = 0;
+      renderPane(client.state);
+      listEl.focus();
+      return;
+    }
+    if (pane !== "fav") {
+      e.preventDefault();
+      setPane("fav");
+      return;
+    }
   }
 
   if (typingInField()) return;
@@ -777,7 +823,6 @@ document.addEventListener("keydown", async (e) => {
       KeyT: "stations",
       KeyH: "history",
       KeyC: "countries",
-      KeyI: "index",
     };
     const next = tabs[e.code];
     if (next) {

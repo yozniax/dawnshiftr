@@ -15,16 +15,17 @@ Open `http://127.0.0.1:43187`. `/index.html` has install steps.
 1. `chrome://extensions`
 2. Developer mode on
 3. Load unpacked → this folder
-4. Click the toolbar icon for a small player window
+4. Click the toolbar icon for a small player window. If a YouTube tab is open, that video starts in DAWNSHIFTr so you can set a sleep timer.
 
 Audio keeps playing in an offscreen document if you close the window.
 
 ## Features
 
-- Radio Browser search, play history, country lists
+- Radio Browser search (includes station notes), play history, country lists
 - Station notes
-- Hide a station with DELETE (Show hidden restores them)
+- Hide a station with DELETE
 - Sleep timer: last ~15 seconds fade, remaining time counts down
+- Play the current YouTube tab from the toolbar icon
 - Live song title when the stream sends ICY metadata
 - Equalizer-style level display while playing
 
@@ -36,9 +37,9 @@ Audio keeps playing in an offscreen document if you close the window.
 | `Enter` | Play cursor |
 | `↑` / `↓` | Move cursor |
 | `F` / `M` / `X` | Fav / note / delete highlighted |
-| `Shift+F` / `T` / `H` / `C` / `I` | Fav / stations / history / countries / index |
+| `Shift+F` / `T` / `H` / `C` | Fav / stations / history / countries |
 | `S` | Sleep 10 min |
-| `Esc` | Index / close |
+| `Esc` | Fav / close |
 | `?` | Shortcuts |
 
 ## License
