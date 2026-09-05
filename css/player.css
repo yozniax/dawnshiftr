@@ -123,7 +123,14 @@ button, input, textarea {
   text-overflow: ellipsis;
 }
 
-.now-note.empty { opacity: 0.7; }
+.now-note.empty { display: none; }
+
+.eq-vis {
+  display: block;
+  width: 100%;
+  height: 40px;
+  margin: 8px 0 6px;
+}
 
 .transport {
   display: flex;
@@ -171,20 +178,22 @@ button, input, textarea {
 
 .row-label .hint { color: var(--muted); }
 
+#sleep-label {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
 #sleep-label.counting {
   color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 
 #sleep-label.fading { color: var(--warn); }
-
-.hint-cancel {
-  border: 0;
-  background: transparent;
-  color: var(--accent);
-  cursor: pointer;
-  padding: 0;
-}
 
 .chips {
   display: flex;

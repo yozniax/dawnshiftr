@@ -17,7 +17,7 @@ async function ensureOffscreen() {
   await chrome.offscreen.createDocument({
     url: OFFSCREEN_URL,
     reasons: ["AUDIO_PLAYBACK"],
-    justification: "Keep broamp radio and local audio playing in the background",
+    justification: "Keep DAWNSHIFTR radio playing in the background",
   });
 }
 
@@ -60,7 +60,7 @@ chrome.runtime.onConnect.addListener((port) => {
     offscreenPort = port;
     while (pending.length) offscreenPort.postMessage(pending.shift());
     port.onMessage.addListener((msg) => {
-      if (msg.type === "state" || msg.type === "ready") {
+      if (msg.type === "state" || msg.type === "analyser" || msg.type === "ready") {
         broadcast(msg.type === "ready" ? { type: "state", state: msg.state } : msg);
       }
     });
@@ -91,8 +91,8 @@ chrome.windows.onRemoved.addListener((id) => {
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
-    chrome.contextMenus.create({ id: "open-window", title: "Open broamp window", contexts: ["action"] });
-    chrome.contextMenus.create({ id: "open-tab", title: "Open broamp in tab", contexts: ["action"] });
+    chrome.contextMenus.create({ id: "open-window", title: "Open DAWNSHIFTR window", contexts: ["action"] });
+    chrome.contextMenus.create({ id: "open-tab", title: "Open DAWNSHIFTR in tab", contexts: ["action"] });
     chrome.contextMenus.create({ id: "open-side", title: "Open side panel", contexts: ["action"] });
   });
 });

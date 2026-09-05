@@ -8,6 +8,8 @@ export class AudioEngine {
     this.ctx = null;
     this.source = null;
     this.gainNode = null;
+    this.analyser = null;
+    this._freq = null;
     this.listeners = new Map();
     this.currentUrl = null;
     this._cueBuffer = null;
@@ -90,9 +92,29 @@ export class AudioEngine {
     this.ctx = new AudioContext();
     this.source = this.ctx.createMediaElementSource(this.audio);
     this.gainNode = this.ctx.createGain();
+    this.analyser = this.ctx.createAnalyser();
+    this.analyser.fftSize = 512;
+    this.analyser.smoothingTimeConstant = 0.72;
+    this._freq = new Uint8Array(this.analyser.frequencyBinCount);
     this.source.connect(this.gainNode);
     this.gainNode.connect(this.ctx.destination);
+    this.gainNode.connect(this.analyser);
     if (this.ctx.state === "suspended") await this.ctx.resume();
+  }
+
+  getSpectrum(bars = 18) {
+    const out = new Array(bars).fill(0);
+    if (!this.analyser || !this._freq) return out;
+    this.analyser.getByteFrequencyData(this._freq);
+    const n = this._freq.length;
+    for (let i = 0; i < bars; i++) {
+      const lo = Math.floor((i / bars) ** 1.7 * n);
+      const hi = Math.max(lo + 1, Math.floor(((i + 1) / bars) ** 1.7 * n));
+      let sum = 0;
+      for (let j = lo; j < hi && j < n; j++) sum += this._freq[j];
+      out[i] = sum / ((hi - lo) * 255);
+    }
+    return out;
   }
 
   setGain(linear) {

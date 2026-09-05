@@ -1,4 +1,5 @@
-const KEY = "broamp-state-v2";
+const KEY = "dawnshiftr-state-v1";
+const LEGACY_KEY = "broamp-state-v2";
 
 function chromeStorage() {
   return globalThis.chrome?.storage?.local;
@@ -7,11 +8,11 @@ function chromeStorage() {
 export async function loadPersisted() {
   const api = chromeStorage();
   if (api) {
-    const bag = await api.get(KEY);
-    return bag[KEY] || {};
+    const bag = await api.get([KEY, LEGACY_KEY]);
+    return bag[KEY] || bag[LEGACY_KEY] || {};
   }
   try {
-    return JSON.parse(localStorage.getItem(KEY) || "{}");
+    return JSON.parse(localStorage.getItem(KEY) || localStorage.getItem(LEGACY_KEY) || "{}");
   } catch {
     return {};
   }

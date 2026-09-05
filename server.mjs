@@ -111,7 +111,7 @@ const server = http.createServer(async (req, res) => {
         const incoming = await fetch(`${host}${rest}`, {
           headers: {
             Accept: "application/json",
-            "User-Agent": "broamp/1.0",
+            "User-Agent": "DAWNSHIFTR/1.0",
           },
         });
         const body = Buffer.from(await incoming.arrayBuffer());
@@ -153,7 +153,7 @@ const server = http.createServer(async (req, res) => {
     try {
       const incoming = await fetch(target, {
         headers: {
-          "User-Agent": "broamp/1.0",
+          "User-Agent": "DAWNSHIFTR/1.0",
           Accept: "*/*",
           "Icy-MetaData": "1",
         },
@@ -225,5 +225,5 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`broamp preview http://127.0.0.1:${PORT}`);
+  console.log(`DAWNSHIFTR preview http://127.0.0.1:${PORT}`);
 });

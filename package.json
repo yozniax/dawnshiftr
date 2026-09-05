@@ -1,9 +1,9 @@
 {
-  "name": "broamp",
+  "name": "dawnshiftr",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Compact bedside radio with notes and a sleep timer",
+  "description": "DAWNSHIFTR — compact bedside radio with notes and a sleep timer",
   "scripts": {
     "start": "node server.mjs",
     "preview": "node server.mjs"

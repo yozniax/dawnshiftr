@@ -47,6 +47,7 @@ export function defaultState() {
     favorites: [],
     notes: seededNotes(playlist),
     hidden: [],
+    history: [],
     error: "",
     songTitle: "",
     sleepMinutes: null,
@@ -82,7 +83,7 @@ export class PlayerCore {
         this.state.error = "";
         this._skips = 0;
       }
-      this.broadcast();
+      this.broadcast("status");
     });
     this.engine.on("time", (t) => {
       if (this.state.live === t.live) return;
@@ -103,7 +104,7 @@ export class PlayerCore {
       this.state.status = "error";
       this.state.playing = false;
       this.state.error = msg;
-      this.broadcast();
+      this.broadcast("status");
     });
   }
 
@@ -129,6 +130,7 @@ export class PlayerCore {
     if (Array.isArray(saved.favorites)) this.state.favorites = saved.favorites;
     if (saved.notes && typeof saved.notes === "object") this.state.notes = saved.notes;
     if (Array.isArray(saved.hidden)) this.state.hidden = saved.hidden.filter(Boolean);
+    if (Array.isArray(saved.history)) this.state.history = saved.history.filter((t) => t?.url);
     if (typeof saved.sleepEndsAt === "number" && saved.sleepEndsAt > Date.now()) {
       this.state.sleepEndsAt = saved.sleepEndsAt;
       this.state.sleepMinutes = saved.sleepMinutes ?? null;
@@ -154,6 +156,7 @@ export class PlayerCore {
       favorites: s.favorites,
       notes: s.notes,
       hidden: s.hidden,
+      history: s.history,
       sleepEndsAt: s.sleepEndsAt,
       sleepMinutes: s.sleepMinutes,
       playlist: s.playlist.map(({ blob, file, _blobUrl, ...rest }) => rest),
@@ -290,18 +293,6 @@ export class PlayerCore {
     this.broadcast();
   }
 
-  notedStations() {
-    return Object.values(this.state.notes)
-      .filter((n) => n?.url && !this.state.hidden.includes(n.id) && !this.state.hidden.includes(n.url))
-      .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
-      .map((n) => ({
-        id: n.id,
-        title: n.title,
-        url: n.url,
-        kind: n.kind || "radio",
-      }));
-  }
-
   setSongTitle(title) {
     const next = String(title || "").trim();
     if (next === this.state.songTitle) return;
@@ -325,7 +316,8 @@ export class PlayerCore {
     this.state.songTitle = "";
     this.state.error = "";
     this.state.status = "buffering";
-    this.broadcast();
+    if (!autoSkip) this.rememberHistory(track);
+    this.broadcast("status");
     let url = track.url;
     if (track.file instanceof Blob) {
       if (track._blobUrl) URL.revokeObjectURL(track._blobUrl);
@@ -360,7 +352,7 @@ export class PlayerCore {
     } else {
       this._switching = false;
     }
-    this.broadcast();
+    this.broadcast("status");
     this.persist();
   }
 
@@ -369,7 +361,7 @@ export class PlayerCore {
       this.engine.pause();
       this.state.playing = false;
       this.state.status = "paused";
-      this.broadcast();
+      this.broadcast("status");
       return;
     }
     if (this._loadedUrl) {
@@ -380,7 +372,7 @@ export class PlayerCore {
         this.state.error = err.message || "play failed";
         this.state.status = "error";
       }
-      this.broadcast();
+      this.broadcast("status");
       return;
     }
     await this.playIndex(this.state.index);
@@ -392,7 +384,16 @@ export class PlayerCore {
     this.state.songTitle = "";
     this.state.playing = false;
     this.state.status = "stopped";
-    this.broadcast();
+    this.broadcast("status");
+  }
+
+  rememberHistory(track) {
+    if (!track?.url || track.file instanceof Blob) return;
+    const { file, _blobUrl, blob, ...rest } = track;
+    const key = trackKey(rest);
+    if (!key) return;
+    const prev = this.state.history || [];
+    this.state.history = [rest, ...prev.filter((t) => trackKey(t) !== key)].slice(0, 50);
   }
 
   async next({ autoSkip = false } = {}) {
@@ -410,7 +411,7 @@ export class PlayerCore {
   setVolume(n) {
     this.state.volume = Math.max(0, Math.min(100, Math.round(Number(n) || 0)));
     this.applyVolume();
-    this.broadcast();
+    this.broadcast("status");
     this.persist();
   }
 
@@ -517,12 +518,6 @@ export class PlayerCore {
     return this.setPlaylist(tracks, { play: !this.keepSession() });
   }
 
-  loadNotedStations() {
-    const tracks = this.notedStations();
-    if (!tracks.length) return;
-    return this.setPlaylist(tracks, { play: !this.keepSession() });
-  }
-
   setTheme(name) {
     this.state.theme = name;
     this.broadcast();
@@ -536,7 +531,7 @@ export class PlayerCore {
 
   statePatch(partial) {
     Object.assign(this.state, partial);
-    this.broadcast();
+    this.broadcast("status");
   }
 
   async command(name, ...args) {

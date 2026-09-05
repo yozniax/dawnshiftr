@@ -2,12 +2,23 @@ import { PlayerCore } from "./core.js";
 
 const core = new PlayerCore();
 const port = chrome.runtime.connect({ name: "offscreen" });
+const BARS = 18;
+let lastBins = 0;
 
 await core.hydrate();
 
 core.subscribe((state, kind) => {
   port.postMessage({ type: "state", state, kind });
 });
+
+function pumpAnalyser(now) {
+  if (core.state.status === "playing" && now - lastBins > 32) {
+    lastBins = now;
+    port.postMessage({ type: "analyser", bins: core.engine.getSpectrum(BARS) });
+  }
+  requestAnimationFrame(pumpAnalyser);
+}
+requestAnimationFrame(pumpAnalyser);
 
 port.onMessage.addListener((msg) => {
   if (msg?.type === "cmd") {
