@@ -1,4 +1,4 @@
-import { PlayerCore, isExtension, defaultState } from "./core.js";
+import { PlayerCore, isExtension, defaultState, SLEEP_PRESETS } from "./core.js";
 import { applyTheme, THEME_NAMES } from "./themes.js";
 import { formatGain } from "./eq.js";
 import { Visualizer, VIS_MODES } from "./visualizer.js";
@@ -160,6 +160,7 @@ function renderOverlay() {
         <span>H</span><span>Recently played</span>
         <span>x</span><span>Remove from playlist</span>
         <span>Tab</span><span>Focus (playlist / EQ / vol / speed)</span>
+        <span>S</span><span>Sleep timer overlay</span>
         <span>?</span><span>This help</span>
       </div>
       <div class="hint" style="margin-top:10px">Esc closes.</div>`;
@@ -247,7 +248,7 @@ async function activateOverlay() {
 }
 
 const surface = new URLSearchParams(location.search).get("surface") || "page";
-if (surface === "popup") document.body.classList.add("compact");
+if (surface === "popup" || surface === "window") document.body.classList.add("compact");
 if (surface === "window") document.body.classList.add("windowed");
 
 const localCore = isExtension() ? null : new PlayerCore();
@@ -314,6 +315,8 @@ function render(state) {
     `SRC [<span class="src">Radio</span>] ${state.playlist.length ? state.index + 1 : 0}/${state.playlist.length}
      · SPD [<b class="${state.focus === "speed" ? "on" : ""}">${state.speed}x</b>] · vis ${state.visualizer} · ${state.theme}`;
 
+  renderSleep(state);
+
   const sh = state.shuffle ? "on" : "";
   document.getElementById("playlist-head").innerHTML =
     `▸─ Playlist ── <span class="${sh}">[Shuffle]</span> [Repeat: ${repeatLabel(state.repeat)}] [${state.playlist.length ? state.cursor + 1 : 0}/${state.playlist.length}] ──`;
@@ -353,7 +356,30 @@ function render(state) {
     <span><kbd>R</kbd> Radio</span>
     <span><kbd>N</kbd> Country</span>
     <span><kbd>t</kbd> Theme</span>
+    <span><kbd>S</kbd> Sleep</span>
     <span><kbd>?</kbd> Keys</span>`;
+}
+
+function fmtSleep(ms) {
+  const s = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${String(r).padStart(2, "0")}`;
+}
+
+function renderSleep(state) {
+  const el = document.getElementById("sleep-line");
+  if (!el) return;
+  const remaining = state.sleepEndsAt ? state.sleepRemainingMs || Math.max(0, state.sleepEndsAt - Date.now()) : 0;
+  const fading = Boolean(state.sleepEndsAt) && remaining <= 60_000;
+  const chips = SLEEP_PRESETS.map((mins) => {
+    const on = state.sleepMinutes === mins ? "on" : "";
+    return `<button type="button" class="sleep-chip ${on}" data-sleep="${mins}">${mins}</button>`;
+  }).join("");
+  const remain = state.sleepEndsAt
+    ? `<button type="button" class="sleep-remain ${fading ? "fade" : ""}" data-sleep="off" title="Cancel timer">${fmtSleep(remaining)}${fading ? " fade" : ""} ×</button>`
+    : `<span class="sleep-label">SLEEP</span>`;
+  el.innerHTML = `${remain}${chips}<span class="sleep-unit">min</span>`;
 }
 
 function moveCursor(delta) {
@@ -471,6 +497,27 @@ function openCountries() {
   });
 }
 
+function openSleepPicker() {
+  const current = client.state.sleepMinutes;
+  const names = [...SLEEP_PRESETS.map(String), "off"];
+  openOverlay({
+    kind: "sleep",
+    title: "SLEEP TIMER",
+    hint: "Stops playback when the timer ends. Last minute fades volume. Esc / off cancels.",
+    query: "",
+    items: names.map((name) => ({
+      label: name === "off" ? "  off" : name === String(current) ? `▶ ${name} min` : `  ${name} min`,
+      value: name,
+    })),
+    cursor: Math.max(0, names.indexOf(current != null ? String(current) : "off")),
+    async onPick(item) {
+      closeOverlay();
+      if (item.value === "off") client.command("clearSleepTimer");
+      else client.command("setSleepTimer", Number(item.value));
+    },
+  });
+}
+
 function openPicker(kind, names, current, onPick, title) {
   const items = names.map((name) => ({ label: name === current ? `▶ ${name}` : `  ${name}`, value: name }));
   openOverlay({
@@ -506,6 +553,14 @@ document.getElementById("stream-bar").addEventListener("click", (e) => {
   const rect = e.currentTarget.getBoundingClientRect();
   const t = (e.clientX - rect.left) / rect.width;
   client.command("seekBy", t * s.duration - s.currentTime);
+});
+
+document.getElementById("sleep-line").addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-sleep]");
+  if (!btn) return;
+  const value = btn.dataset.sleep;
+  if (value === "off") client.command("clearSleepTimer");
+  else client.command("setSleepTimer", Number(value));
 });
 
 fileInput.addEventListener("change", async () => {
@@ -668,6 +723,10 @@ document.addEventListener("keydown", async (e) => {
   }
   if (key === "t" && !e.shiftKey) {
     openPicker("theme", THEME_NAMES, s.theme, (name) => client.command("setTheme", name), "THEME");
+    return;
+  }
+  if (key === "S") {
+    openSleepPicker();
     return;
   }
   if (key === "v" && !e.shiftKey && !e.ctrlKey) {

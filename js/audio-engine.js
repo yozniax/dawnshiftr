@@ -94,8 +94,8 @@ export class AudioEngine {
     });
   }
 
-  setVolumeDb(db) {
-    const linear = db <= -30 ? 0 : Math.pow(10, db / 20);
+  setVolumeDb(db, fade = 1) {
+    const linear = (db <= -30 ? 0 : Math.pow(10, db / 20)) * Math.max(0, Math.min(1, fade));
     this.audio.volume = 1;
     if (this.gainNode) this.gainNode.gain.value = linear;
     else this.audio.volume = Math.min(1, linear);

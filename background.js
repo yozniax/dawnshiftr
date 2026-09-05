@@ -1,10 +1,10 @@
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
-
 const OFFSCREEN_URL = "offscreen.html";
+const PLAYER_URL = "player.html?surface=window";
 
 let offscreenPort = null;
 const uiPorts = new Set();
 const pending = [];
+let playerWindowId = null;
 
 async function hasOffscreen() {
   if (chrome.offscreen.hasDocument) return chrome.offscreen.hasDocument();
@@ -36,6 +36,25 @@ function broadcast(msg) {
   }
 }
 
+async function openPlayerWindow() {
+  if (playerWindowId != null) {
+    try {
+      await chrome.windows.update(playerWindowId, { focused: true, drawAttention: true });
+      return;
+    } catch {
+      playerWindowId = null;
+    }
+  }
+  const win = await chrome.windows.create({
+    url: chrome.runtime.getURL(PLAYER_URL),
+    type: "popup",
+    width: 400,
+    height: 640,
+    focused: true,
+  });
+  playerWindowId = win?.id ?? null;
+}
+
 chrome.runtime.onConnect.addListener((port) => {
   if (port.name === "offscreen") {
     offscreenPort = port;
@@ -61,38 +80,40 @@ chrome.runtime.onConnect.addListener((port) => {
   }
 });
 
+chrome.action.onClicked.addListener(() => {
+  ensureOffscreen().catch(() => {});
+  openPlayerWindow();
+});
+
+chrome.windows.onRemoved.addListener((id) => {
+  if (id === playerWindowId) playerWindowId = null;
+});
+
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: "open-window", title: "Open broamp window", contexts: ["action"] });
     chrome.contextMenus.create({ id: "open-tab", title: "Open broamp in tab", contexts: ["action"] });
+    chrome.contextMenus.create({ id: "open-side", title: "Open side panel", contexts: ["action"] });
   });
 });
 
-chrome.runtime.onStartup.addListener(() => {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-});
-
-chrome.contextMenus.onClicked.addListener((info) => {
+chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (info.menuItemId === "open-window") {
-    chrome.windows.create({
-      url: chrome.runtime.getURL("player.html?surface=window"),
-      type: "popup",
-      width: 460,
-      height: 760,
-      focused: true,
-    });
+    openPlayerWindow();
   }
   if (info.menuItemId === "open-tab") {
     chrome.tabs.create({ url: chrome.runtime.getURL("player.html") });
+  }
+  if (info.menuItemId === "open-side") {
+    const windowId = tab?.windowId ?? (await chrome.windows.getCurrent()).id;
+    await chrome.sidePanel.open({ windowId });
   }
 });
 
 chrome.commands.onCommand.addListener(async (command) => {
   await ensureOffscreen();
   if (command === "open-player") {
-    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab?.id) await chrome.sidePanel.open({ tabId: tab.id });
+    await openPlayerWindow();
     return;
   }
   const map = {
@@ -102,6 +123,12 @@ chrome.commands.onCommand.addListener(async (command) => {
   };
   const args = map[command];
   if (args) sendToOffscreen({ type: "cmd", name: args[0], args: [] });
+});
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== "sleep-stop") return;
+  await ensureOffscreen();
+  sendToOffscreen({ type: "cmd", name: "finishSleepTimer", args: [] });
 });
 
 ensureOffscreen().catch(() => {});

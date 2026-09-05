@@ -411,6 +411,52 @@ body.compact .vis-wrap {
   height: 52px;
 }
 
+.sleep {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  color: var(--fg);
+}
+
+.sleep-label,
+.sleep-unit {
+  color: var(--fg);
+  margin-right: 2px;
+}
+
+.sleep-chip,
+.sleep-remain {
+  font: inherit;
+  color: var(--fg);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--fg) 35%, transparent);
+  padding: 0 6px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.sleep-chip:hover,
+.sleep-remain:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.sleep-chip.on,
+.sleep-remain {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.sleep-remain.fade {
+  color: var(--yellow);
+  border-color: var(--yellow);
+}
+
 body.windowed {
-  min-width: 380px;
+  min-width: 360px;
+}
+
+body.windowed .vis-wrap {
+  height: 48px;
 }

@@ -5,6 +5,8 @@ import { VIS_MODES } from "./visualizer.js";
 import { THEME_NAMES } from "./themes.js";
 import { loadPersisted, savePersisted } from "./storage.js";
 
+export const SLEEP_PRESETS = [60, 55, 30, 25, 10, 5, 3, 1];
+
 export function defaultState() {
   const playlist = featuredTracks();
   return {
@@ -31,6 +33,9 @@ export function defaultState() {
     error: "",
     nowPlaying: "",
     helpBar: true,
+    sleepMinutes: null,
+    sleepEndsAt: null,
+    sleepRemainingMs: 0,
   };
 }
 
@@ -49,6 +54,8 @@ export class PlayerCore {
     this.listeners = new Set();
     this._loadedUrl = null;
     this._skips = 0;
+    this._sleepIv = 0;
+    this._lastSleepSec = -1;
     this.engine.on("status", (status) => {
       this.state.status = status;
       this.state.playing = status === "playing";
@@ -109,6 +116,12 @@ export class PlayerCore {
     if (Array.isArray(saved.favorites)) this.state.favorites = saved.favorites;
     if (Array.isArray(saved.history)) this.state.history = saved.history;
     if (typeof saved.helpBar === "boolean") this.state.helpBar = saved.helpBar;
+    if (typeof saved.sleepEndsAt === "number" && saved.sleepEndsAt > Date.now()) {
+      this.state.sleepEndsAt = saved.sleepEndsAt;
+      this.state.sleepMinutes = saved.sleepMinutes ?? null;
+      this.startSleepLoop();
+      this.armSleepAlarm();
+    }
     if (Array.isArray(saved.playlist) && saved.playlist.length) {
       this.state.playlist = saved.playlist;
       this.state.index = Math.min(saved.index ?? 0, saved.playlist.length - 1);
@@ -132,6 +145,8 @@ export class PlayerCore {
       favorites: s.favorites,
       history: s.history,
       helpBar: s.helpBar,
+      sleepEndsAt: s.sleepEndsAt,
+      sleepMinutes: s.sleepMinutes,
       playlist: s.playlist.map(({ blob, file, _blobUrl, ...rest }) => rest),
       index: s.index,
     });
@@ -139,8 +154,98 @@ export class PlayerCore {
 
   applyAudioSettings() {
     this.engine.setEq(this.state.eqGains);
-    this.engine.setVolumeDb(this.state.volumeDb);
+    this.applyVolume();
     this.engine.setSpeed(this.state.speed);
+  }
+
+  sleepRemaining() {
+    if (!this.state.sleepEndsAt) return null;
+    return Math.max(0, this.state.sleepEndsAt - Date.now());
+  }
+
+  fadeAmount() {
+    const remaining = this.sleepRemaining();
+    if (remaining == null) return 1;
+    if (remaining >= 60_000) return 1;
+    return remaining / 60_000;
+  }
+
+  applyVolume() {
+    this.engine.setVolumeDb(this.state.volumeDb, this.fadeAmount());
+  }
+
+  startSleepLoop() {
+    this.stopSleepLoop();
+    this.tickSleep();
+    this._sleepIv = setInterval(() => this.tickSleep(), 250);
+  }
+
+  stopSleepLoop() {
+    if (this._sleepIv) clearInterval(this._sleepIv);
+    this._sleepIv = 0;
+    this._lastSleepSec = -1;
+  }
+
+  tickSleep() {
+    const remaining = this.sleepRemaining();
+    if (remaining == null) {
+      this.stopSleepLoop();
+      return;
+    }
+    this.applyVolume();
+    this.state.sleepRemainingMs = remaining;
+    const sec = Math.ceil(remaining / 1000);
+    if (sec !== this._lastSleepSec) {
+      this._lastSleepSec = sec;
+      this.broadcast("sleep");
+    }
+    if (remaining <= 0) this.finishSleepTimer();
+  }
+
+  setSleepTimer(minutes) {
+    const mins = Number(minutes);
+    if (!SLEEP_PRESETS.includes(mins)) return;
+    this.state.sleepMinutes = mins;
+    this.state.sleepEndsAt = Date.now() + mins * 60_000;
+    this.state.sleepRemainingMs = mins * 60_000;
+    this.startSleepLoop();
+    this.armSleepAlarm();
+    this.persist();
+    this.broadcast();
+  }
+
+  clearSleepTimer() {
+    this.stopSleepLoop();
+    this.clearSleepAlarm();
+    this.state.sleepMinutes = null;
+    this.state.sleepEndsAt = null;
+    this.state.sleepRemainingMs = 0;
+    this.applyVolume();
+    this.persist();
+    this.broadcast();
+  }
+
+  finishSleepTimer() {
+    this.stopSleepLoop();
+    this.clearSleepAlarm();
+    this.state.sleepMinutes = null;
+    this.state.sleepEndsAt = null;
+    this.state.sleepRemainingMs = 0;
+    this.stop();
+    this.applyVolume();
+    this.persist();
+    this.broadcast();
+  }
+
+  armSleepAlarm() {
+    if (typeof chrome === "undefined" || !chrome.alarms || !this.state.sleepEndsAt) return;
+    chrome.alarms.clear("sleep-stop");
+    chrome.alarms.create("sleep-stop", { when: this.state.sleepEndsAt });
+  }
+
+  clearSleepAlarm() {
+    if (typeof chrome === "undefined" || !chrome.alarms) return;
+    chrome.alarms.clear("sleep-stop");
   }
 
   unlock() {
@@ -256,7 +361,7 @@ export class PlayerCore {
 
   setVolumeDb(db) {
     this.state.volumeDb = Math.max(-30, Math.min(6, db));
-    this.engine.setVolumeDb(this.state.volumeDb);
+    this.applyVolume();
     this.broadcast();
     this.persist();
   }
