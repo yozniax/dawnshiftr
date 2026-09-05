@@ -228,24 +228,15 @@ client.subscribe((state, kind) => {
   render(state);
 });
 
-function statusCopy(state) {
-  const track = state.air || state.playlist[state.index];
-  if (state.status === "error") return `ERROR: ${state.error || "CAN'T PLAY"}`;
-  if (state.status === "buffering") return "TUNING…";
-  if (state.status === "playing") {
-    if (track?.kind === "youtube") return "YOUTUBE";
-    return state.live ? "ON AIR" : "PLAYING";
-  }
-  if (state.status === "paused") return "PAUSED";
-  return "STOPPED";
+function isOnAir(state) {
+  return state.status === "playing" || (state.status === "buffering" && !!state.air);
 }
 
 function renderChrome(state) {
   const track = state.air || state.playlist[state.index];
-  const kicker = document.getElementById("now-kicker");
-  kicker.textContent = statusCopy(state);
-  kicker.classList.toggle("on-air", state.status === "playing" && state.live);
-  document.getElementById("track-title").textContent = track?.title || "PICK A STATION";
+  const title = document.getElementById("track-title");
+  title.textContent = track?.title || "PICK A STATION";
+  title.classList.toggle("is-on", isOnAir(state));
   const song = document.getElementById("song-title");
   song.textContent = String(state.songTitle || "").trim();
   const noteEl = document.getElementById("now-note");
@@ -302,8 +293,9 @@ function playingKey(state) {
 
 function highlightPlayingKeys(state) {
   const key = playingKey(state);
+  const on = isOnAir(state);
   listEl.querySelectorAll(".track").forEach((el) => {
-    el.classList.toggle("is-playing", el.dataset.key === key);
+    el.classList.toggle("is-playing", on && el.dataset.key === key);
     el.classList.toggle("is-cursor", Number(el.dataset.i) === browseCursor);
   });
 }
@@ -403,7 +395,7 @@ function mergeTracks(primary, extra) {
 function stationRow(t, i, { history = false } = {}) {
   const memo = noteText(t);
   const fav = client.isFavorite(t);
-  const playing = trackKey(t) === playingKey(client.state) ? "is-playing" : "";
+  const playing = isOnAir(client.state) && trackKey(t) === playingKey(client.state) ? "is-playing" : "";
   const cur = i === browseCursor ? "is-cursor" : "";
   const del = `<button type="button" class="mini hide" data-row-act="delete">DELETE</button>`;
   return `<div class="track ${playing} ${cur}" data-i="${i}" data-key="${escapeAttr(trackKey(t))}">

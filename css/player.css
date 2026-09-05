@@ -111,17 +111,11 @@ button, input, textarea {
   flex-shrink: 0;
 }
 
-.help-btn:hover { color: var(--accent); border-color: var(--accent); }
-
-#now-kicker {
-  color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+a.help-btn {
+  text-decoration: none;
 }
 
-#now-kicker.on-air { color: var(--accent); }
+.help-btn:hover { color: var(--accent); border-color: var(--accent); }
 
 .now-card {
   background: var(--bg-card);
@@ -149,6 +143,8 @@ button, input, textarea {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.now-title.is-on { color: var(--accent); }
 
 .song-slot,
 .note-slot {
@@ -382,13 +378,13 @@ button, input, textarea {
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
-.track.is-playing .name { color: var(--accent); }
-
 .track .name {
   color: var(--text);
   font-weight: 600;
   font-size: 12px;
 }
+
+.track.is-playing .name { color: var(--accent); }
 
 .track .memo {
   margin: 1px 0 0;
