@@ -84,6 +84,8 @@ button, input, textarea {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 8px 10px 8px;
+  flex-shrink: 0;
+  contain: layout;
 }
 
 .kicker {
@@ -91,6 +93,10 @@ button, input, textarea {
   font-size: 10px;
   letter-spacing: 0.06em;
   color: var(--muted);
+  min-height: 1.35em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .now-title {
@@ -98,7 +104,11 @@ button, input, textarea {
   font-size: 15px;
   font-weight: 650;
   line-height: 1.25;
+  min-height: 1.25em;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .song {
@@ -106,6 +116,7 @@ button, input, textarea {
   color: var(--accent);
   font-size: 12px;
   min-height: 1.2em;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -117,25 +128,31 @@ button, input, textarea {
   margin: 2px 0 6px;
   color: var(--muted);
   font-size: 11px;
+  min-height: 1.2em;
+  line-height: 1.2;
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.now-note.empty { display: none; }
+.now-note.empty {
+  visibility: hidden;
+}
 
 .eq-vis {
   display: block;
   width: 100%;
   height: 40px;
   margin: 10px 0 0;
+  flex-shrink: 0;
 }
 
 .transport {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-height: 36px;
 }
 
 .icon-btn, .play-btn {
@@ -143,6 +160,12 @@ button, input, textarea {
   background: var(--bg-elev);
   cursor: pointer;
   border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 0;
+  line-height: 1;
 }
 
 .icon-btn { width: 28px; height: 28px; }
@@ -186,11 +209,13 @@ button, input, textarea {
   cursor: pointer;
   font: inherit;
   text-align: left;
+  min-height: 1.2em;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
 }
 
 #sleep-label.counting {
   color: var(--accent);
-  font-variant-numeric: tabular-nums;
 }
 
 #sleep-label.fading { color: var(--warn); }
@@ -232,22 +257,11 @@ button, input, textarea {
 }
 
 .station-toolbar {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  align-items: center;
   padding: 8px;
   border-bottom: 1px solid var(--line);
 }
-
-#station-filter {
-  width: 100%;
-  background: var(--bg-elev);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 5px 8px;
-  outline: none;
-}
-
-#station-filter:focus { border-color: var(--accent); }
 
 .toolbar-btns {
   display: flex;
@@ -312,6 +326,8 @@ button, input, textarea {
   display: flex;
   align-items: center;
   gap: 2px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .mini {
@@ -320,11 +336,14 @@ button, input, textarea {
   color: var(--muted);
   cursor: pointer;
   padding: 0 4px;
-  font-size: 13px;
+  font-size: 10px;
+  letter-spacing: 0.04em;
   line-height: 1.2;
+  font-weight: 650;
 }
 
 .mini:hover { color: var(--accent); }
+.mini.on { color: var(--accent); }
 .mini.hide:hover { color: var(--danger); }
 
 .empty {
@@ -391,16 +410,34 @@ button, input, textarea {
 }
 
 .overlay .item {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  align-items: center;
   padding: 6px 6px;
   color: var(--muted);
   cursor: pointer;
   border-radius: 8px;
 }
 
+.overlay .item .item-main {
+  min-width: 0;
+}
+
 .overlay .item span {
   display: block;
   font-size: 11px;
   margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.overlay .item b {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .overlay .item.on {

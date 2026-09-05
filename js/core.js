@@ -384,6 +384,14 @@ export class PlayerCore {
     this.state.history = [rest, ...prev.filter((t) => trackKey(t) !== key)].slice(0, 50);
   }
 
+  removeHistory(track) {
+    const key = trackKey(track);
+    if (!key) return;
+    this.state.history = (this.state.history || []).filter((t) => trackKey(t) !== key);
+    this.persist();
+    this.broadcast();
+  }
+
   async next({ autoSkip = false } = {}) {
     const n = this.state.playlist.length;
     if (!n) return;

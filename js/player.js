@@ -65,11 +65,9 @@ function wrapLocal(core) {
 const overlayEl = document.getElementById("overlay");
 const toastEl = document.getElementById("toast");
 const listEl = document.getElementById("list");
-const filterEl = document.getElementById("station-filter");
 
 let overlay = null;
 let toastTimer = 0;
-let listFilter = "";
 let analyserBins = null;
 
 function toast(text) {
@@ -133,11 +131,11 @@ function renderOverlay() {
         <span>Space</span><span>Play / pause</span>
         <span>Enter</span><span>Play cursor</span>
         <span>↑ ↓</span><span>Move list</span>
-        <span>x</span><span>Hide station</span>
-        <span>m</span><span>Edit note</span>
-        <span>f</span><span>Favorite</span>
-        <span>R</span><span>Tune</span>
-        <span>N</span><span>Country</span>
+        <span>x</span><span>Delete / hide</span>
+        <span>m</span><span>Note</span>
+        <span>f</span><span>Fav</span>
+        <span>R</span><span>Tunes</span>
+        <span>N</span><span>Countries</span>
         <span>S</span><span>Sleep</span>
         <span>?</span><span>This help</span>
       </div>
@@ -176,36 +174,77 @@ function renderOverlay() {
   renderOverlayResults();
 }
 
+function stationActionButtons(track, { history = false } = {}) {
+  const fav = client.isFavorite(track);
+  return `<button type="button" class="mini ${fav ? "on" : ""}" data-row-act="fav">FAV</button>
+    <button type="button" class="mini" data-row-act="note">NOTE</button>
+    ${history ? `<button type="button" class="mini hide" data-row-act="delete">DELETE</button>` : ""}`;
+}
+
+function refreshTunesOverlay() {
+  if (overlay?.kind !== "radio") return;
+  if (!String(overlay.query || "").trim()) overlay.items = historyItems();
+  renderOverlayResults();
+}
+
 function renderOverlayResults() {
   if (!overlay) return;
   const box = overlayEl.querySelector("#overlay-results");
   if (!box) return;
   const { items = [], cursor = 0, loading, error } = overlay;
-  if (loading) box.innerHTML = `<div class="empty">Loading…</div>`;
-  else if (error) box.innerHTML = `<div class="empty err">ERR: ${escapeHtml(error)}</div>`;
-  else if (!items.length) {
+  if (loading) {
+    box.innerHTML = `<div class="empty">LOADING…</div>`;
+    return;
+  }
+  if (error) {
+    box.innerHTML = `<div class="empty err">ERR: ${escapeHtml(error)}</div>`;
+    return;
+  }
+  if (!items.length) {
     const empty =
       overlay.kind === "radio" && !String(overlay.query || "").trim()
-        ? "Type to search all stations."
-        : "Nothing here.";
+        ? "TYPE TO SEARCH ALL STATIONS."
+        : "NOTHING HERE.";
     box.innerHTML = `<div class="empty">${empty}</div>`;
+    return;
   }
-  else {
-    box.innerHTML = items
-      .map((it, i) => {
-        const sub = it.sub ? `<span>${escapeHtml(it.sub)}</span>` : "";
-        return `<div class="item ${i === cursor ? "on" : ""}" data-i="${i}"><b>${escapeHtml(it.label)}</b>${sub}</div>`;
-      })
-      .join("");
-    box.querySelectorAll(".item").forEach((el) => {
-      el.addEventListener("mousedown", (e) => {
-        e.preventDefault();
-        overlay.cursor = Number(el.dataset.i);
-        activateOverlay();
-      });
+  box.innerHTML = items
+    .map((it, i) => {
+      const sub = it.sub ? `<span>${escapeHtml(it.sub)}</span>` : "";
+      const actions = it.track
+        ? `<div class="track-side">${stationActionButtons(it.track, { history: Boolean(it.history) })}</div>`
+        : "";
+      return `<div class="item ${i === cursor ? "on" : ""}" data-i="${i}">
+        <div class="item-main"><b>${escapeHtml(it.label)}</b>${sub}</div>
+        ${actions}
+      </div>`;
+    })
+    .join("");
+  box.querySelectorAll(".item").forEach((el) => {
+    el.addEventListener("click", (e) => {
+      if (e.target.closest("[data-row-act]")) return;
+      overlay.cursor = Number(el.dataset.i);
+      activateOverlay();
     });
-    box.querySelector(".item.on")?.scrollIntoView({ block: "nearest" });
-  }
+  });
+  box.querySelectorAll("[data-row-act]").forEach((btn) => {
+    btn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const item = overlay.items?.[Number(btn.closest(".item")?.dataset.i)];
+      if (!item?.track) return;
+      const act = btn.dataset.rowAct;
+      if (act === "fav") client.command("toggleFavorite", item.track);
+      else if (act === "note") openMemo(item.track);
+      else if (act === "delete" && item.history) {
+        await client.command("removeHistory", item.track);
+        overlay.items = historyItems();
+        overlay.cursor = Math.min(overlay.cursor || 0, Math.max(0, overlay.items.length - 1));
+        renderOverlayResults();
+      }
+    });
+  });
+  box.querySelector(".item.on")?.scrollIntoView({ block: "nearest" });
 }
 
 function bindOverlayInput() {
@@ -260,6 +299,7 @@ client.subscribe((state, kind) => {
     return;
   }
   render(state);
+  refreshTunesOverlay();
 });
 
 function statusCopy(state) {
@@ -286,8 +326,8 @@ function renderChrome(state) {
   }
   const note = noteText(track);
   const noteEl = document.getElementById("now-note");
-  noteEl.hidden = !note;
-  noteEl.textContent = note;
+  noteEl.textContent = note || "NO NOTE";
+  noteEl.classList.toggle("empty", !note);
   document.getElementById("btn-play").textContent = state.status === "playing" ? "❚❚" : "▶";
   const vol = document.getElementById("vol-slider");
   if (document.activeElement !== vol) vol.value = String(state.volume ?? 80);
@@ -300,14 +340,20 @@ function render(state) {
   renderList(state);
 }
 
+function formatSleepRemain(ms) {
+  const sec = Math.max(0, Math.ceil(ms / 1000));
+  const m = Math.floor(sec / 60);
+  const s = sec % 60;
+  return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+}
+
 function updateSleepClock(state) {
   const remaining = state.sleepEndsAt ? state.sleepRemainingMs || Math.max(0, state.sleepEndsAt - Date.now()) : 0;
   const fading = Boolean(state.sleepEndsAt) && remaining <= FADE_MS;
   const label = document.getElementById("sleep-label");
   if (!label) return;
   if (state.sleepEndsAt) {
-    const mins = Math.max(1, Math.ceil(remaining / 60_000));
-    label.textContent = `SLEEPING IN ${mins} MIN`;
+    label.textContent = `SLEEPING IN ${formatSleepRemain(remaining)}`;
   } else {
     label.textContent = "SLEEP";
   }
@@ -327,11 +373,7 @@ function renderSleepChips(state) {
 }
 
 function listSignature(state) {
-  return (
-    listFilter +
-    "\n" +
-    state.playlist.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")
-  );
+  return state.playlist.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n");
 }
 
 function updatePlayingHighlight(state) {
@@ -349,23 +391,12 @@ function renderList(state) {
     return;
   }
   listEl.dataset.sig = sig;
-  const q = listFilter.trim().toLowerCase();
-  const rows = state.playlist
-    .map((t, i) => ({ t, i }))
-    .filter(({ t }) => {
-      if (!q) return true;
-      const memo = noteText(t).toLowerCase();
-      return t.title.toLowerCase().includes(q) || memo.includes(q);
-    });
+  const rows = state.playlist.map((t, i) => ({ t, i }));
   const hiddenN = state.hidden?.length || 0;
   if (!state.playlist.length) {
     listEl.innerHTML = `<div class="empty">No stations.
-      ${hiddenN ? `<div><button type="button" id="unhide-all">Show ${hiddenN} hidden</button></div>` : "Tune or country."}</div>`;
+      ${hiddenN ? `<div><button type="button" id="unhide-all">Show ${hiddenN} hidden</button></div>` : "Tunes or countries."}</div>`;
     document.getElementById("unhide-all")?.addEventListener("click", () => client.command("unhideAll"));
-    return;
-  }
-  if (!rows.length) {
-    listEl.innerHTML = `<div class="empty">No match for “${escapeHtml(listFilter)}”.</div>`;
     return;
   }
   listEl.innerHTML = rows
@@ -373,16 +404,16 @@ function renderList(state) {
       const playing = i === state.index ? "is-playing" : "";
       const cur = i === state.cursor ? "is-cursor" : "";
       const memo = noteText(t);
-      const star = client.isFavorite(t) ? "★" : "☆";
+      const fav = client.isFavorite(t);
       return `<div class="track ${playing} ${cur}" data-i="${i}">
         <div>
           <div class="name">${escapeHtml(t.title)}</div>
           <div class="memo ${memo ? "" : "none"}">${escapeHtml(memo || "No note")}</div>
         </div>
         <div class="track-side">
-          <button type="button" class="mini" data-fav="${i}" title="Favorite">${star}</button>
-          <button type="button" class="mini" data-memo="${i}" title="Note">NOTE</button>
-          <button type="button" class="mini hide" data-hide="${i}" title="Hide">x</button>
+          <button type="button" class="mini ${fav ? "on" : ""}" data-fav="${i}">FAV</button>
+          <button type="button" class="mini" data-memo="${i}">NOTE</button>
+          <button type="button" class="mini hide" data-hide="${i}">DELETE</button>
         </div>
       </div>`;
     })
@@ -437,8 +468,9 @@ function queueTracks(tracks) {
 function historyItems() {
   return (client.state.history || []).map((t) => ({
     label: t.title,
-    sub: [noteText(t), t.country, t.bitrate ? `${t.bitrate}k` : "Recent"].filter(Boolean).join(" · "),
+    sub: [noteText(t), t.country, t.bitrate ? `${t.bitrate}k` : "RECENT"].filter(Boolean).join(" · "),
     track: t,
+    history: true,
   }));
 }
 
@@ -455,8 +487,8 @@ function showFavorites() {
 function openRadio(seed = "") {
   openOverlay({
     kind: "radio",
-    title: "Tune",
-    hint: "History · type to search all stations",
+    title: "TUNES",
+    hint: "HISTORY · TYPE TO SEARCH ALL STATIONS",
     query: seed,
     items: historyItems(),
     cursor: 0,
@@ -469,7 +501,9 @@ function openRadio(seed = "") {
         overlay.error = "";
         overlay.items = historyItems();
         overlay.cursor = 0;
-        overlay.hint = overlay.items.length ? "History · type to search all stations" : "No history yet · type to search all stations";
+        overlay.hint = overlay.items.length
+          ? "HISTORY · TYPE TO SEARCH ALL STATIONS"
+          : "NO HISTORY YET · TYPE TO SEARCH ALL STATIONS";
         const hint = overlayEl.querySelector(".hint");
         if (hint) hint.textContent = overlay.hint;
         renderOverlayResults();
@@ -486,10 +520,11 @@ function openRadio(seed = "") {
           label: t.title,
           sub: [noteText(t), t.country, t.bitrate ? `${t.bitrate}k` : ""].filter(Boolean).join(" · "),
           track: t,
+          history: false,
         }));
         overlay.cursor = 0;
         const hint = overlayEl.querySelector(".hint");
-        if (hint) hint.textContent = "All stations";
+        if (hint) hint.textContent = "ALL STATIONS";
         renderOverlayResults();
       } catch (err) {
         if (overlay?.kind !== "radio" || seq !== overlay._seq) return;
@@ -509,8 +544,8 @@ function openRadio(seed = "") {
 function openCountries() {
   openOverlay({
     kind: "countries",
-    title: "Country",
-    hint: "Load stations from a country.",
+    title: "COUNTRIES",
+    hint: "LOAD STATIONS FROM A COUNTRY.",
     items: REGIONS.map((r) => ({ label: r.name, sub: r.code, code: r.code })),
     cursor: 0,
     async onPick(item) {
@@ -586,11 +621,6 @@ document.querySelector(".toolbar-btns").addEventListener("click", (e) => {
   if (act === "radio") openRadio();
   if (act === "country") openCountries();
   if (act === "fav") showFavorites();
-});
-
-filterEl.addEventListener("input", () => {
-  listFilter = filterEl.value;
-  renderList(client.state);
 });
 
 document.addEventListener("keydown", async (e) => {

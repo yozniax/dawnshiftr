@@ -22,9 +22,9 @@ Audio keeps playing in an offscreen document if you close the window.
 ## Features
 
 - Radio Browser search, tune history, country lists
-- Station notes (searchable)
-- Hide a station with `x` (Show hidden restores them)
-- Sleep timer: last ~15 seconds fade
+- Station notes
+- Hide a station with DELETE (Show hidden restores them)
+- Sleep timer: last ~15 seconds fade, remaining time counts down
 - Live song title when the stream sends ICY metadata
 - Equalizer-style level display while playing
 
@@ -34,9 +34,9 @@ Audio keeps playing in an offscreen document if you close the window.
 | --- | --- |
 | `Space` | Play / pause |
 | `Enter` | Play cursor |
-| `x` | Hide station |
+| `x` | Delete / hide station |
 | `m` | Note |
-| `R` / `N` | Tune / country |
+| `R` / `N` | Tunes / countries |
 | `S` | Sleep |
 | `?` | Help |
 
