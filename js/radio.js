@@ -178,13 +178,20 @@ export async function resolveClick(uuid) {
   }
 }
 
+export function isWebPreview() {
+  return typeof location !== "undefined" && (location.protocol === "http:" || location.protocol === "https:");
+}
+
+export function fetchableUrl(url) {
+  if (!url) return url;
+  if (url.startsWith("blob:") || url.startsWith("data:")) return url;
+  if (isWebPreview()) return `/proxy?url=${encodeURIComponent(url)}`;
+  return url;
+}
+
 export function playableUrl(url) {
   if (!url) return url;
   if (url.startsWith("blob:") || url.startsWith("data:")) return url;
-  if (typeof location !== "undefined" && location.protocol === "chrome-extension:") return url;
-  if (typeof location !== "undefined" && location.protocol.startsWith("http")) {
-    return `/proxy?url=${encodeURIComponent(url)}`;
-  }
   return url;
 }
 
@@ -243,7 +250,7 @@ export async function loadFromUrl(raw) {
   if (!url) throw new Error("empty url");
   const lower = url.split("?")[0].toLowerCase();
   if (lower.endsWith(".m3u") || lower.endsWith(".m3u8") || lower.endsWith(".pls")) {
-    const fetchUrl = playableUrl(url);
+    const fetchUrl = fetchableUrl(url);
     const res = await fetch(fetchUrl);
     if (!res.ok) throw new Error(`playlist ${res.status}`);
     const text = await res.text();

@@ -1,11 +1,10 @@
 import { EQ_BANDS } from "./eq.js";
-import { playableUrl } from "./radio.js";
+import { isWebPreview, playableUrl } from "./radio.js";
 
 export class AudioEngine {
   constructor() {
     this.audio = new Audio();
-    this.audio.preload = "auto";
-    this.audio.crossOrigin = "anonymous";
+    this.audio.preload = "none";
     this.ctx = null;
     this.source = null;
     this.filters = [];
@@ -16,6 +15,11 @@ export class AudioEngine {
     this.corsFailed = false;
     this.listeners = new Map();
     this.currentUrl = null;
+    this.wantPlaying = false;
+    this.reconnecting = false;
+    this.reconnectTimer = 0;
+    this.stalls = 0;
+    this.didPlay = false;
     this.bindAudioEvents();
   }
 
@@ -35,16 +39,43 @@ export class AudioEngine {
     for (const fn of this.listeners.get(event) || []) fn(payload);
   }
 
+  isLive() {
+    const d = this.audio.duration;
+    return !Number.isFinite(d) || d === Infinity || d === 0;
+  }
+
   bindAudioEvents() {
     const a = this.audio;
-    a.addEventListener("playing", () => this.emit("status", "playing"));
-    a.addEventListener("pause", () => {
-      if (!a.ended) this.emit("status", "paused");
+    a.addEventListener("playing", () => {
+      this.stalls = 0;
+      this.reconnecting = false;
+      this.didPlay = true;
+      clearTimeout(this.reconnectTimer);
+      this.emit("status", "playing");
     });
-    a.addEventListener("waiting", () => this.emit("status", "buffering"));
-    a.addEventListener("stalled", () => this.emit("status", "buffering"));
-    a.addEventListener("ended", () => this.emit("ended"));
+    a.addEventListener("pause", () => {
+      if (!a.ended && this.wantPlaying === false) this.emit("status", "paused");
+    });
+    a.addEventListener("waiting", () => {
+      if (this.wantPlaying) this.emit("status", "buffering");
+      if (this.didPlay) this.scheduleReconnect();
+    });
+    a.addEventListener("stalled", () => {
+      if (this.didPlay) this.scheduleReconnect();
+    });
+    a.addEventListener("ended", () => {
+      if (this.wantPlaying && this.isLive()) {
+        this.reconnect();
+        return;
+      }
+      this.wantPlaying = false;
+      this.emit("ended");
+    });
     a.addEventListener("error", () => {
+      if (this.wantPlaying && this.isLive() && this.stalls < 8) {
+        this.reconnect();
+        return;
+      }
       const code = a.error?.code;
       this.emit("error", code === 4 ? "format / network" : "playback failed");
     });
@@ -52,9 +83,35 @@ export class AudioEngine {
       this.emit("time", {
         currentTime: a.currentTime || 0,
         duration: Number.isFinite(a.duration) ? a.duration : 0,
-        live: !Number.isFinite(a.duration) || a.duration === Infinity,
+        live: this.isLive(),
       });
     });
+  }
+
+  scheduleReconnect() {
+    if (!this.wantPlaying || this.reconnecting || !this.isLive()) return;
+    clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => this.reconnect(), 1800);
+  }
+
+  async reconnect() {
+    if (!this.wantPlaying || !this.currentUrl || this.reconnecting) return;
+    this.reconnecting = true;
+    this.stalls += 1;
+    clearTimeout(this.reconnectTimer);
+    this.emit("status", "buffering");
+    try {
+      const url = playableUrl(this.currentUrl);
+      this.audio.removeAttribute("src");
+      this.audio.src = url;
+      this.audio.load();
+      await this.audio.play();
+    } catch {
+      this.reconnecting = false;
+      if (this.wantPlaying && this.stalls < 8) {
+        this.reconnectTimer = setTimeout(() => this.reconnect(), 1500 * this.stalls);
+      }
+    }
   }
 
   async ensureGraph() {
@@ -105,11 +162,17 @@ export class AudioEngine {
     this.audio.playbackRate = Math.max(0.25, Math.min(2, rate));
   }
 
-  async load(url, { cors = true } = {}) {
+  async load(url, { cors } = {}) {
     await this.ensureGraph();
     this.currentUrl = url;
-    this.corsFailed = false;
-    this.audio.crossOrigin = cors ? "anonymous" : null;
+    this.stalls = 0;
+    this.didPlay = false;
+    this.reconnecting = false;
+    clearTimeout(this.reconnectTimer);
+    const useCors = cors ?? !isWebPreview();
+    this.corsFailed = !useCors;
+    if (useCors) this.audio.crossOrigin = "anonymous";
+    else this.audio.removeAttribute("crossorigin");
     this.audio.src = playableUrl(url);
     this.audio.load();
     this.emit("status", "buffering");
@@ -117,28 +180,33 @@ export class AudioEngine {
 
   async play() {
     await this.ensureGraph();
+    this.wantPlaying = true;
     try {
       await this.audio.play();
     } catch (err) {
       if (this.audio.crossOrigin && this.currentUrl) {
         this.corsFailed = true;
-        this.audio.crossOrigin = null;
-        const t = this.audio.currentTime;
+        this.audio.removeAttribute("crossorigin");
+        this.audio.src = playableUrl(this.currentUrl);
         this.audio.load();
-        this.audio.currentTime = t;
         await this.audio.play();
         this.emit("status", "playing");
         return;
       }
+      this.wantPlaying = false;
       throw err;
     }
   }
 
   pause() {
+    this.wantPlaying = false;
+    clearTimeout(this.reconnectTimer);
     this.audio.pause();
   }
 
   stop() {
+    this.wantPlaying = false;
+    clearTimeout(this.reconnectTimer);
     this.audio.pause();
     try {
       this.audio.currentTime = 0;
@@ -164,7 +232,7 @@ export class AudioEngine {
     return {
       currentTime: this.audio.currentTime || 0,
       duration: Number.isFinite(this.audio.duration) ? this.audio.duration : 0,
-      live: !Number.isFinite(this.audio.duration) || this.audio.duration === Infinity,
+      live: this.isLive(),
       paused: this.audio.paused,
     };
   }

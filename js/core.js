@@ -60,7 +60,10 @@ export class PlayerCore {
       this.state.live = t.live;
       this.broadcast("time");
     });
-    this.engine.on("ended", () => this.next({ fromEnded: true }));
+    this.engine.on("ended", () => {
+      if (this.state.live) return;
+      this.next({ fromEnded: true });
+    });
     this.engine.on("error", (msg) => {
       this.state.status = "error";
       this.state.playing = false;
