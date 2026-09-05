@@ -1,6 +1,6 @@
 import { AudioEngine } from "./audio-engine.js";
 import { EQ_PRESETS, clampGain, nextPreset } from "./eq.js";
-import { featuredTracks, resolveClick } from "./radio.js";
+import { featuredTracks, resolveClick, unwrapStreamUrl } from "./radio.js";
 import { VIS_MODES } from "./visualizer.js";
 import { THEME_NAMES } from "./themes.js";
 import { loadPersisted, savePersisted } from "./storage.js";
@@ -48,10 +48,14 @@ export class PlayerCore {
     this.state = defaultState();
     this.listeners = new Set();
     this._loadedUrl = null;
+    this._skips = 0;
     this.engine.on("status", (status) => {
       this.state.status = status;
       this.state.playing = status === "playing";
-      if (status === "playing") this.state.error = "";
+      if (status === "playing") {
+        this.state.error = "";
+        this._skips = 0;
+      }
       this.broadcast();
     });
     this.engine.on("time", (t) => {
@@ -62,6 +66,11 @@ export class PlayerCore {
     });
     this.engine.on("ended", () => this.next({ fromEnded: true }));
     this.engine.on("error", (msg) => {
+      if (this._skips < 6 && this.state.playlist.length > 1) {
+        this._skips += 1;
+        void this.next({ autoSkip: true });
+        return;
+      }
       this.state.status = "error";
       this.state.playing = false;
       this.state.error = msg;
@@ -134,12 +143,17 @@ export class PlayerCore {
     this.engine.setSpeed(this.state.speed);
   }
 
+  unlock() {
+    return this.engine.ensureGraph();
+  }
+
   current() {
     return this.state.playlist[this.state.index] || null;
   }
 
-  async playIndex(i, { autoplay = true } = {}) {
+  async playIndex(i, { autoplay = true, autoSkip = false } = {}) {
     if (!this.state.playlist.length) return;
+    if (!autoSkip) this._skips = 0;
     this.state.index = ((i % this.state.playlist.length) + this.state.playlist.length) % this.state.playlist.length;
     this.state.cursor = this.state.index;
     const track = this.current();
@@ -154,6 +168,7 @@ export class PlayerCore {
     } else {
       const resolved = await resolveClick(track.id);
       if (resolved) url = resolved;
+      url = await unwrapStreamUrl(url);
     }
     await this.engine.load(url);
     this.applyAudioSettings();
@@ -163,9 +178,9 @@ export class PlayerCore {
         await this.engine.play();
         this.state.playing = true;
         this.state.status = "playing";
-      } catch (err) {
-        this.state.status = "error";
-        this.state.error = err.message || "autoplay blocked";
+      } catch {
+        this.state.playing = false;
+        this.state.status = "paused";
       }
     }
     this.broadcast();
@@ -200,11 +215,11 @@ export class PlayerCore {
     this.broadcast();
   }
 
-  async next({ fromEnded = false } = {}) {
+  async next({ fromEnded = false, autoSkip = false } = {}) {
     const n = this.state.playlist.length;
     if (!n) return;
     if (this.state.repeat === "one" && fromEnded) {
-      await this.playIndex(this.state.index);
+      await this.playIndex(this.state.index, { autoSkip });
       return;
     }
     if (this.state.shuffle) {
@@ -212,16 +227,16 @@ export class PlayerCore {
       if (n > 1) {
         while (i === this.state.index) i = Math.floor(Math.random() * n);
       }
-      await this.playIndex(i);
+      await this.playIndex(i, { autoSkip });
       return;
     }
     const next = this.state.index + 1;
     if (next >= n) {
-      if (this.state.repeat === "all" || !fromEnded) await this.playIndex(0);
+      if (this.state.repeat === "all" || !fromEnded) await this.playIndex(0, { autoSkip });
       else this.stop();
       return;
     }
-    await this.playIndex(next);
+    await this.playIndex(next, { autoSkip });
   }
 
   async prev() {

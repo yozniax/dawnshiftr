@@ -351,6 +351,7 @@ function render(state) {
     <span><kbd>Spc</kbd> ▶❚❚</span>
     <span><kbd>f</kbd> Fav</span>
     <span><kbd>R</kbd> Radio</span>
+    <span><kbd>N</kbd> Country</span>
     <span><kbd>t</kbd> Theme</span>
     <span><kbd>?</kbd> Keys</span>`;
 }
@@ -432,6 +433,7 @@ async function openRadio(seed = "") {
     },
     async onPick(item) {
       closeOverlay();
+      client.command("unlock");
       await client.command("setPlaylist", [item.track, ...client.state.playlist.filter((t) => t.url !== item.track.url)]);
     },
   });
@@ -446,6 +448,7 @@ function openCountries() {
     items: REGIONS.map((r) => ({ label: `${r.name}  (${r.code})`, code: r.code })),
     cursor: 0,
     async onPick(item) {
+      client.command("unlock");
       overlay.loading = true;
       overlay._bound = false;
       renderOverlay();

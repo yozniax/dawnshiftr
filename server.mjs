@@ -38,6 +38,40 @@ const server = http.createServer(async (req, res) => {
   const host = req.headers.host || `127.0.0.1:${PORT}`;
   const url = new URL(req.url || "/", `http://${host}`);
 
+  if (url.pathname.startsWith("/rb/")) {
+    const rest = `${url.pathname.slice(3)}${url.search}`;
+    if (!rest.startsWith("/json/")) {
+      res.writeHead(400, { "content-type": "text/plain" });
+      res.end("bad path");
+      return;
+    }
+    const hosts = ["https://de1.api.radio-browser.info", "https://fi1.api.radio-browser.info"];
+    let lastError = null;
+    for (const host of hosts) {
+      try {
+        const incoming = await fetch(`${host}${rest}`, {
+          headers: {
+            Accept: "application/json",
+            "User-Agent": "broamp/1.0",
+          },
+        });
+        const body = Buffer.from(await incoming.arrayBuffer());
+        res.writeHead(incoming.status, {
+          "Content-Type": incoming.headers.get("content-type") || "application/json",
+          "Access-Control-Allow-Origin": "*",
+          "Cache-Control": "no-store",
+        });
+        res.end(body);
+        return;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    res.writeHead(502, { "content-type": "text/plain" });
+    res.end(String(lastError?.message || lastError || "radio-browser failed"));
+    return;
+  }
+
   if (url.pathname === "/proxy") {
     const target = url.searchParams.get("url") || "";
     if (!/^https?:\/\//i.test(target)) {

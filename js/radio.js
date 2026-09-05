@@ -82,6 +82,11 @@ const API_HOSTS = [
 let cachedHost = null;
 
 async function api(path) {
+  if (typeof location !== "undefined" && (location.protocol === "http:" || location.protocol === "https:")) {
+    const res = await fetch(`/rb${path}`, { headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error(`${res.status}`);
+    return res.json();
+  }
   const hosts = cachedHost ? [cachedHost, ...API_HOSTS.filter((h) => h !== cachedHost)] : API_HOSTS;
   let lastError = null;
   for (const host of hosts) {
@@ -97,6 +102,14 @@ async function api(path) {
     }
   }
   throw lastError || new Error("Radio Browser unreachable");
+}
+
+function isPlayableStation(station) {
+  if (Number(station.hls) === 1) return false;
+  const url = String(station.url_resolved || station.url || "").toLowerCase();
+  if (!url) return false;
+  if (url.includes(".m3u8") || url.includes("ihrhls.com") || url.includes("/hls/")) return false;
+  return true;
 }
 
 export function toTrack(station, extra = {}) {
@@ -130,20 +143,19 @@ export async function searchStations({ name = "", tag = "", country = "", limit 
   if (tag) params.set("tag", tag);
   if (country) params.set("countrycode", country);
   const rows = await api(`/json/stations/search?${params}`);
-  return (rows || [])
-    .filter((s) => s.url_resolved || s.url)
-    .map((s) => toTrack(s));
+  return (rows || []).filter(isPlayableStation).map((s) => toTrack(s));
 }
 
 export async function topStations(limit = 40) {
   const rows = await api(
     `/json/stations/search?hidebroken=true&order=clickcount&reverse=true&limit=${limit}`
   );
-  return (rows || []).filter((s) => s.url_resolved || s.url).map((s) => toTrack(s));
+  return (rows || []).filter(isPlayableStation).map((s) => toTrack(s));
 }
 
 export async function stationsByCountry(code, limit = 80) {
-  return searchStations({ country: code, limit });
+  const rows = await searchStations({ country: code, limit: Math.min(200, Math.max(limit * 2, 80)) });
+  return rows.slice(0, limit);
 }
 
 export const REGIONS = [
@@ -236,6 +248,21 @@ function absUrl(url, base) {
   } catch {
     return url;
   }
+}
+
+export async function unwrapStreamUrl(url) {
+  if (!url) return url;
+  const lower = url.split("?")[0].toLowerCase();
+  if (lower.endsWith(".m3u8")) return url;
+  if (lower.endsWith(".m3u") || lower.endsWith(".pls") || lower.endsWith(".asx")) {
+    try {
+      const tracks = await loadFromUrl(url);
+      return tracks.find((t) => t.url && !t.url.toLowerCase().includes(".m3u8"))?.url || url;
+    } catch {
+      return url;
+    }
+  }
+  return url;
 }
 
 export async function loadFromUrl(raw) {
