@@ -408,10 +408,19 @@ function openMemo(track) {
   openOverlay({ kind: "memo", track, body: noteText(track) });
 }
 
+function isTuned() {
+  return ["playing", "buffering", "paused"].includes(client.state.status);
+}
+
 function playPicked(track) {
   client.command("unhideKey", trackKey(track));
   client.command("unlock");
   return client.command("setPlaylist", [track, ...client.state.playlist.filter((t) => t.url !== track.url)]);
+}
+
+function queueTracks(tracks) {
+  const keep = isTuned();
+  return client.command("setPlaylist", tracks, { play: !keep });
 }
 
 function openRadio(seed = "") {
@@ -473,8 +482,8 @@ function openCountries() {
           toast("No stations");
           return;
         }
-        const keep = ["playing", "buffering", "paused"].includes(client.state.status);
-        await client.command("setPlaylist", tracks, { play: !keep });
+        const keep = isTuned();
+        await queueTracks(tracks);
         toast(keep ? `${item.code} · still playing` : `${item.code} · ${tracks.length}`);
       } catch (err) {
         overlay.loading = false;
@@ -516,7 +525,7 @@ function openNoted() {
   openOverlay({
     kind: "notes",
     title: "Noted stations",
-    hint: "Pick a station you already described.",
+    hint: "Load noted stations. Playing audio stays on the current station.",
     items: tracks.map((n) => ({
       label: n.title,
       sub: n.text,
@@ -525,7 +534,11 @@ function openNoted() {
     cursor: 0,
     async onPick(item) {
       closeOverlay();
-      await playPicked(item.track);
+      client.command("unhideKey", trackKey(item.track));
+      const keep = isTuned();
+      const tracks = [item.track, ...client.state.playlist.filter((t) => t.url !== item.track.url)];
+      await queueTracks(tracks);
+      toast(keep ? "Notes · still playing" : "Tuned");
     },
   });
 }
@@ -562,9 +575,21 @@ document.querySelector(".toolbar-btns").addEventListener("click", (e) => {
   if (act === "country") openCountries();
   if (act === "fav") {
     if (!client.state.favorites?.length) toast("No favorites yet");
-    else client.command("loadFavorites");
+    else {
+      const keep = isTuned();
+      client.command("loadFavorites");
+      toast(keep ? "Favorites · still playing" : "Favorites");
+    }
   }
-  if (act === "notes") openNoted();
+  if (act === "notes") {
+    const noted = Object.values(client.state.notes || {}).filter((n) => n?.url);
+    if (!noted.length) toast("No notes yet");
+    else {
+      const keep = isTuned();
+      client.command("loadNotedStations");
+      toast(keep ? "Notes · still playing" : "Notes");
+    }
+  }
   if (act === "url") openOverlay({ kind: "url", query: "" });
   if (act === "file") fileInput.click();
 });
@@ -713,11 +738,21 @@ document.addEventListener("keydown", async (e) => {
   }
   if (key === "n") {
     if (!s.favorites?.length) toast("No favorites yet");
-    else client.command("loadFavorites");
+    else {
+      const keep = isTuned();
+      client.command("loadFavorites");
+      toast(keep ? "Favorites · still playing" : "Favorites");
+    }
     return;
   }
   if (key === "M") {
-    openNoted();
+    const noted = Object.values(s.notes || {}).filter((n) => n?.url);
+    if (!noted.length) toast("No notes yet");
+    else {
+      const keep = isTuned();
+      client.command("loadNotedStations");
+      toast(keep ? "Notes · still playing" : "Notes");
+    }
     return;
   }
   if (key === "t") {

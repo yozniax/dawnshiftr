@@ -302,12 +302,6 @@ export class PlayerCore {
       }));
   }
 
-  loadNotedStations() {
-    const tracks = this.notedStations();
-    if (!tracks.length) return;
-    return this.setPlaylist(tracks);
-  }
-
   setSongTitle(title) {
     const next = String(title || "").trim();
     if (next === this.state.songTitle) return;
@@ -409,13 +403,14 @@ export class PlayerCore {
     this.persist();
   }
 
+  keepSession() {
+    return this.state.status === "playing" || this.state.status === "buffering" || this.state.status === "paused";
+  }
+
   setPlaylist(tracks, { play = true } = {}) {
     const incoming = this.visible(tracks);
     const current = this.current();
-    const keep =
-      !play &&
-      current &&
-      (this.state.status === "playing" || this.state.status === "buffering" || this.state.status === "paused");
+    const keep = !play && current && this.keepSession();
     if (keep) {
       const key = trackKey(current);
       const rest = incoming.filter((t) => trackKey(t) !== key);
@@ -502,7 +497,13 @@ export class PlayerCore {
   loadFavorites() {
     const tracks = this.visible(this.state.favorites.map((t) => ({ ...t })));
     if (!tracks.length) return;
-    return this.setPlaylist(tracks);
+    return this.setPlaylist(tracks, { play: !this.keepSession() });
+  }
+
+  loadNotedStations() {
+    const tracks = this.notedStations();
+    if (!tracks.length) return;
+    return this.setPlaylist(tracks, { play: !this.keepSession() });
   }
 
   setTheme(name) {
