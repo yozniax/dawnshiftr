@@ -60,7 +60,58 @@ async function openPlayerWindow() {
 function youtubeFromTab(tab) {
   const parsed = parseYouTubeUrl(tab?.url || "");
   if (!parsed) return null;
-  return { ...parsed, title: tab.title || "YouTube", url: tab.url };
+  return { ...parsed, title: tab.title || "YouTube", url: tab.url, tabId: tab.id };
+}
+
+function playMediaInPage() {
+  const player = document.getElementById("movie_player") || document.querySelector(".html5-video-player");
+  if (player && typeof player.playVideo === "function") {
+    try {
+      player.unMute();
+    } catch {
+      /* ignore */
+    }
+    try {
+      player.playVideo();
+    } catch {
+      /* ignore */
+    }
+    return { ok: true, via: "player" };
+  }
+  const v =
+    document.querySelector("video.html5-main-video") ||
+    document.querySelector("video") ||
+    document.querySelector("audio");
+  if (!v) return { ok: false, reason: "no-media" };
+  v.muted = false;
+  const result = v.play();
+  if (result && typeof result.then === "function") {
+    return result.then(() => ({ ok: true, via: "element" })).catch((err) => ({ ok: false, reason: String(err) }));
+  }
+  return { ok: true, via: "element-sync" };
+}
+
+function kickTabPlayback(tabId) {
+  if (tabId == null || !chrome.scripting?.executeScript) return;
+  try {
+    const unmute = chrome.tabs.update(tabId, { muted: false });
+    if (unmute && typeof unmute.catch === "function") void unmute.catch(() => {});
+  } catch {
+    /* ignore */
+  }
+  void chrome.scripting
+    .executeScript({
+      target: { tabId },
+      world: "MAIN",
+      func: playMediaInPage,
+    })
+    .catch(() => {});
+  void chrome.scripting
+    .executeScript({
+      target: { tabId },
+      files: ["js/yt-tab.js"],
+    })
+    .catch(() => {});
 }
 
 async function findYouTubeTab(clickedTab) {
@@ -80,10 +131,18 @@ async function findYouTubeTab(clickedTab) {
 }
 
 async function playYouTubeTab(tab) {
+  const direct = youtubeFromTab(tab);
+  if (direct) kickTabPlayback(direct.tabId);
+  const yt = direct || (await findYouTubeTab(tab));
+  if (!yt) return false;
+  if (!direct) kickTabPlayback(yt.tabId);
   await ensureOffscreen();
-  const yt = await findYouTubeTab(tab);
-  if (yt) sendToOffscreen({ type: "cmd", name: "playYouTube", args: [yt] });
-  return Boolean(yt);
+  sendToOffscreen({
+    type: "cmd",
+    name: "playYouTube",
+    args: [{ ...yt, alreadyPlaying: true }],
+  });
+  return true;
 }
 
 chrome.runtime.onConnect.addListener((port) => {

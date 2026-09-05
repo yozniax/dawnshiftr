@@ -21,7 +21,7 @@ Load unpacked:
 1. `chrome://extensions`
 2. Developer mode on
 3. Load unpacked → this folder (the one with `manifest.json`)
-4. Click the toolbar icon for a small player window. If a YouTube tab is open, that video starts in DAWNSHIFTr so you can set a sleep timer.
+4. Click the toolbar icon for a small player window. If a YouTube tab is open, that tab’s video starts so you can set a sleep timer from DAWNSHIFTr (Chrome cannot play a YouTube embed inside the extension page).
 
 Audio keeps playing in an offscreen document if you close the window.
 

@@ -424,7 +424,12 @@ export class PlayerCore {
     }
     if (!raw.autoSkip) this.rememberHistory(track);
     this.broadcast("status");
-    this.youtube.load(parsed);
+    this.youtube.load({
+      ...parsed,
+      tabId: raw.tabId,
+      alreadyPlaying: raw.alreadyPlaying,
+      url: raw.url || parsed.url,
+    });
     this.applyVolume();
     if (gen !== this._playGen) return;
     this.persist();

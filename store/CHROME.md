@@ -8,7 +8,7 @@ The player is a Manifest V3 extension. Toolbar click opens a compact window. Aud
 2. Turn on **Developer mode**
 3. **Load unpacked** → choose this repository folder (the one that contains `manifest.json`)
 4. Pin DAWNSHIFTr on the toolbar
-5. Click the icon. A YouTube tab in Chrome starts here so you can set sleep.
+5. Click the icon. A YouTube tab in Chrome plays in that tab; DAWNSHIFTr is the remote (sleep / pause / volume).
 
 Right-click the toolbar icon for a tab or side-panel view.
 
@@ -43,8 +43,8 @@ DAWNSHIFTr is a compact bedside radio for Chrome.
 • Add a one-line note to any station
 • Sleep timer with a last-15-second fade (PT / Pomodoro stops without fading)
 • Live song title when the stream sends ICY metadata
-• Click the toolbar icon on a YouTube tab to play that video here with a sleep timer
-• Playback continues after you close the player window
+• Click the toolbar icon on a YouTube tab to control that tab from here (sleep timer, pause, volume)
+• Radio playback continues after you close the player window
 
 Keyboard: Space play/pause, Enter play the highlighted row, arrows move, F / N / X fav note delete, P pomodoro, S stations, Esc favorites.
 
@@ -68,8 +68,9 @@ Screenshots for the listing: `store/screenshots/` (1280×800). Upload at least o
 | `contextMenus` | Open window / tab / side panel; play this YouTube page |
 | `commands` | Media keys and Ctrl+Shift+P to open the player |
 | `alarms` | Sleep timer backup if the offscreen page is suspended |
-| `tabs` | Find an open YouTube tab to play in the player |
+| `tabs` | Find an open YouTube tab to control |
 | `activeTab` | Play the tab you clicked the toolbar icon on |
+| `scripting` | Start / pause / fade the YouTube tab’s video (embeds inside the extension page are blocked) |
 | Host access `<all_urls>` | Station streams are arbitrary http(s) URLs. The player also fetches ICY titles and Radio Browser search. |
 
 Single purpose: internet radio (plus the current YouTube tab in the same player). No other browsing data is read.

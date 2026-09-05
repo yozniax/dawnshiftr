@@ -160,6 +160,7 @@ function renderOverlay() {
         <span>Shift+C</span><span>Countries tab</span>
         <span>Esc</span><span>Fav / close</span>
       </div>
+      <div class="hint">Toolbar icon on a YouTube tab plays that tab. Sleep / pause control it from here.</div>
       <div class="hint stats-line">
         <button type="button" id="btn-stats">Usage stats: …</button>
         <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy</a>

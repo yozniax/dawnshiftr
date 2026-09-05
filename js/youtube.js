@@ -57,15 +57,13 @@ export function youtubeTrack(info, title) {
   };
 }
 
-export class YouTubeEngine {
+function inExtension() {
+  return typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
+}
+
+class Emitter {
   constructor() {
-    this.iframe = null;
-    this._volume = 80;
-    this._wantPlay = false;
     this.listeners = new Map();
-    this._origin = typeof location !== "undefined" ? location.origin : "*";
-    this._onMessage = (e) => this.handleMessage(e);
-    if (typeof window !== "undefined") window.addEventListener("message", this._onMessage);
   }
 
   on(event, fn) {
@@ -77,6 +75,20 @@ export class YouTubeEngine {
   emit(event, payload) {
     for (const fn of this.listeners.get(event) || []) fn(payload);
   }
+}
+
+/** Preview / non-extension: iframe embed. Chrome extension pages cannot play this. */
+export class YouTubeIframeEngine extends Emitter {
+  constructor() {
+    super();
+    this.iframe = null;
+    this._volume = 80;
+    this._wantPlay = false;
+    this._origin = typeof location !== "undefined" ? location.origin : "*";
+    this._handshakeIv = 0;
+    this._onMessage = (e) => this.handleMessage(e);
+    if (typeof window !== "undefined") window.addEventListener("message", this._onMessage);
+  }
 
   mount() {
     if (this.iframe) return;
@@ -84,6 +96,7 @@ export class YouTubeEngine {
     iframe.id = "yt-player";
     iframe.allow = "autoplay; encrypted-media; fullscreen";
     iframe.setAttribute("allowfullscreen", "true");
+    iframe.referrerPolicy = "strict-origin-when-cross-origin";
     iframe.style.cssText = "position:fixed;left:0;top:0;width:320px;height:180px;opacity:0;pointer-events:none;border:0;z-index:-1";
     iframe.addEventListener("load", () => this.handshake());
     document.body.appendChild(iframe);
@@ -99,6 +112,7 @@ export class YouTubeEngine {
       modestbranding: "1",
       controls: "0",
       fs: "0",
+      widget_referrer: "https://www.youtube.com/",
     });
     if (this._origin && this._origin !== "null" && !this._origin.startsWith("chrome-extension:")) {
       params.set("origin", this._origin);
@@ -116,6 +130,24 @@ export class YouTubeEngine {
     this.send("addEventListener", ["onError"]);
   }
 
+  startHandshakeLoop() {
+    this.stopHandshakeLoop();
+    let n = 0;
+    this.handshake();
+    this._handshakeIv = setInterval(() => {
+      n += 1;
+      this.handshake();
+      if (n > 20) this.stopHandshakeLoop();
+    }, 400);
+  }
+
+  stopHandshakeLoop() {
+    if (this._handshakeIv) {
+      clearInterval(this._handshakeIv);
+      this._handshakeIv = 0;
+    }
+  }
+
   send(func, args = []) {
     this.iframe?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), "*");
   }
@@ -125,6 +157,7 @@ export class YouTubeEngine {
     this._wantPlay = true;
     this.emit("status", "buffering");
     this.iframe.src = this.embedSrc(videoId, listId);
+    this.startHandshakeLoop();
   }
 
   play() {
@@ -139,6 +172,7 @@ export class YouTubeEngine {
 
   stop({ silent = false } = {}) {
     this._wantPlay = false;
+    this.stopHandshakeLoop();
     try {
       this.send("stopVideo");
     } catch {
@@ -167,6 +201,7 @@ export class YouTubeEngine {
     const event = data.event;
     const info = data.info;
     if (event === "onReady" || event === "initialDelivery") {
+      this.stopHandshakeLoop();
       this.send("setVolume", [this._volume]);
       if (this._wantPlay) this.send("playVideo");
       return;
@@ -189,5 +224,151 @@ export class YouTubeEngine {
     else if (state === 2) this.emit("status", "paused");
     else if (state === 3) this.emit("status", "buffering");
     else if (state === 0) this.emit("ended");
+  }
+}
+
+/**
+ * Chrome extension: drive the open YouTube tab.
+ * Extension pages cannot autoplay a hidden youtube.com iframe (Error 153 / autoplay).
+ */
+export class YouTubeTabEngine extends Emitter {
+  constructor() {
+    super();
+    this._volume = 80;
+    this._wantPlay = false;
+    this.tabId = null;
+    this._onMessage = (msg, sender) => this.handleRuntimeMessage(msg, sender);
+    if (typeof chrome !== "undefined" && chrome.runtime?.onMessage) {
+      chrome.runtime.onMessage.addListener(this._onMessage);
+    }
+  }
+
+  handleRuntimeMessage(msg, sender) {
+    if (msg?.ns !== "dawnshiftr-yt" || !msg.event) return;
+    if (this.tabId != null && sender.tab?.id != null && sender.tab.id !== this.tabId) return;
+    if (msg.event === "status" && msg.status) this.emit("status", msg.status);
+    if (msg.event === "ended") this.emit("ended");
+    if (msg.event === "title" && msg.title) this.emit("title", youtubeTitle(msg.title));
+  }
+
+  rpc(op, extra = {}) {
+    return new Promise((resolve) => {
+      if (this.tabId == null || typeof chrome === "undefined" || !chrome.tabs?.sendMessage) {
+        resolve(null);
+        return;
+      }
+      chrome.tabs.sendMessage(this.tabId, { ns: "dawnshiftr-yt", op, ...extra }, (res) => {
+        if (chrome.runtime.lastError) resolve(null);
+        else resolve(res || null);
+      });
+    });
+  }
+
+  async ensureScript() {
+    if (this.tabId == null || typeof chrome === "undefined" || !chrome.scripting?.executeScript) return;
+    try {
+      await chrome.scripting.executeScript({ target: { tabId: this.tabId }, files: ["js/yt-tab.js"] });
+    } catch {
+      /* restricted page */
+    }
+  }
+
+  async resolveTab(info) {
+    if (info?.tabId != null) return info.tabId;
+    if (typeof chrome === "undefined" || !chrome.tabs?.query) return null;
+    const tabs = await chrome.tabs.query({
+      url: ["*://*.youtube.com/*", "*://music.youtube.com/*", "*://youtu.be/*"],
+    });
+    for (const tab of tabs) {
+      const parsed = parseYouTubeUrl(tab.url || "");
+      if (info?.videoId && parsed?.videoId === info.videoId) return tab.id;
+      if (!info?.videoId && info?.listId && parsed?.listId === info.listId) return tab.id;
+    }
+    if (info?.url) {
+      try {
+        const created = await chrome.tabs.create({ url: info.url, active: true });
+        return created?.id ?? null;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  async load(info) {
+    this._wantPlay = true;
+    this.emit("status", info?.alreadyPlaying ? "playing" : "buffering");
+    this.tabId = await this.resolveTab(info);
+    if (this.tabId == null) {
+      this.emit("error", "open the YouTube tab");
+      return;
+    }
+    try {
+      await chrome.tabs.update(this.tabId, { muted: false });
+    } catch {
+      /* ignore */
+    }
+    await this.ensureScript();
+    await this.rpc("volume", { value: this._volume });
+    if (!info?.alreadyPlaying) await this.rpc("play", { volume: this._volume });
+    let snap = await this.rpc("ping");
+    if (!snap?.playing) snap = (await this.rpc("play", { volume: this._volume })) || snap;
+    if (snap?.title) this.emit("title", youtubeTitle(snap.title));
+    if (snap?.playing || info?.alreadyPlaying) this.emit("status", "playing");
+    else if (snap && !snap.hasMedia) this.emit("error", "no video on this tab");
+  }
+
+  play() {
+    this._wantPlay = true;
+    void this.rpc("play", { volume: this._volume }).then((snap) => {
+      if (snap?.playing) this.emit("status", "playing");
+    });
+  }
+
+  pause() {
+    this._wantPlay = false;
+    void this.rpc("pause");
+  }
+
+  stop({ silent = false } = {}) {
+    this._wantPlay = false;
+    void this.rpc("pause");
+    this.tabId = null;
+    if (!silent) this.emit("status", "stopped");
+  }
+
+  setVolume(n) {
+    this._volume = Math.max(0, Math.min(100, Math.round(Number(n) || 0)));
+    void this.rpc("volume", { value: this._volume });
+  }
+}
+
+export class YouTubeEngine {
+  constructor() {
+    this.impl = inExtension() ? new YouTubeTabEngine() : new YouTubeIframeEngine();
+  }
+
+  on(event, fn) {
+    return this.impl.on(event, fn);
+  }
+
+  load(info) {
+    return this.impl.load(info);
+  }
+
+  play() {
+    return this.impl.play();
+  }
+
+  pause() {
+    return this.impl.pause();
+  }
+
+  stop(opts) {
+    return this.impl.stop(opts);
+  }
+
+  setVolume(n) {
+    return this.impl.setVolume(n);
   }
 }
