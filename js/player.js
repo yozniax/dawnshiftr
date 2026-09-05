@@ -83,7 +83,6 @@ function closeOverlay() {
 
 function openOverlay(next) {
   overlay = next;
-  overlay._shell = null;
   overlay._bound = false;
   overlayEl.classList.add("open");
   renderOverlay();
@@ -265,9 +264,12 @@ if (!isExtension()) localCore.hydrate();
 applyTheme(client.state.theme);
 
 client.subscribe((state, kind) => {
+  if (kind === "time" || kind === "sleep" || kind === "meta") {
+    renderChrome(state);
+    return;
+  }
   applyTheme(state.theme);
-  if (kind === "time" || kind === "sleep" || kind === "meta") renderChrome(state);
-  else render(state);
+  render(state);
 });
 
 function statusCopy(state) {
@@ -436,6 +438,27 @@ function queueTracks(tracks) {
   return client.command("setPlaylist", tracks, { play: !keep });
 }
 
+function showFavorites() {
+  if (!client.state.favorites?.length) {
+    toast("No favorites yet");
+    return;
+  }
+  const keep = isTuned();
+  client.command("loadFavorites");
+  toast(keep ? "Favorites · still playing" : "Favorites");
+}
+
+function showNotes() {
+  const noted = Object.values(client.state.notes || {}).filter((n) => n?.url);
+  if (!noted.length) {
+    toast("No notes yet");
+    return;
+  }
+  const keep = isTuned();
+  client.command("loadNotedStations");
+  toast(keep ? "Notes · still playing" : "Notes");
+}
+
 function openRadio(seed = "") {
   openOverlay({
     kind: "radio",
@@ -527,35 +550,6 @@ function openSleepPicker() {
   });
 }
 
-function openNoted() {
-  const tracks = Object.values(client.state.notes || {})
-    .filter((n) => n?.url)
-    .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
-  if (!tracks.length) {
-    toast("No notes yet");
-    return;
-  }
-  openOverlay({
-    kind: "notes",
-    title: "Noted stations",
-    hint: "Load noted stations. Playing audio stays on the current station.",
-    items: tracks.map((n) => ({
-      label: n.title,
-      sub: n.text,
-      track: { id: n.id, title: n.title, url: n.url, kind: n.kind || "radio" },
-    })),
-    cursor: 0,
-    async onPick(item) {
-      closeOverlay();
-      client.command("unhideKey", trackKey(item.track));
-      const keep = isTuned();
-      const tracks = [item.track, ...client.state.playlist.filter((t) => t.url !== item.track.url)];
-      await queueTracks(tracks);
-      toast(keep ? "Notes · still playing" : "Tuned");
-    },
-  });
-}
-
 document.getElementById("track-title").addEventListener("click", () => client.command("toggle"));
 document.getElementById("now-note").addEventListener("click", () => {
   openMemo(client.state.playlist[client.state.index]);
@@ -586,23 +580,8 @@ document.querySelector(".toolbar-btns").addEventListener("click", (e) => {
   const act = btn.dataset.act;
   if (act === "radio") openRadio();
   if (act === "country") openCountries();
-  if (act === "fav") {
-    if (!client.state.favorites?.length) toast("No favorites yet");
-    else {
-      const keep = isTuned();
-      client.command("loadFavorites");
-      toast(keep ? "Favorites · still playing" : "Favorites");
-    }
-  }
-  if (act === "notes") {
-    const noted = Object.values(client.state.notes || {}).filter((n) => n?.url);
-    if (!noted.length) toast("No notes yet");
-    else {
-      const keep = isTuned();
-      client.command("loadNotedStations");
-      toast(keep ? "Notes · still playing" : "Notes");
-    }
-  }
+  if (act === "fav") showFavorites();
+  if (act === "notes") showNotes();
   if (act === "url") openOverlay({ kind: "url", query: "" });
   if (act === "file") fileInput.click();
 });
@@ -753,22 +732,11 @@ document.addEventListener("keydown", async (e) => {
     return;
   }
   if (key === "n") {
-    if (!s.favorites?.length) toast("No favorites yet");
-    else {
-      const keep = isTuned();
-      client.command("loadFavorites");
-      toast(keep ? "Favorites · still playing" : "Favorites");
-    }
+    showFavorites();
     return;
   }
   if (key === "M") {
-    const noted = Object.values(s.notes || {}).filter((n) => n?.url);
-    if (!noted.length) toast("No notes yet");
-    else {
-      const keep = isTuned();
-      client.command("loadNotedStations");
-      toast(keep ? "Notes · still playing" : "Notes");
-    }
+    showNotes();
     return;
   }
   if (key === "t") {

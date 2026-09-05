@@ -8,7 +8,6 @@ export class AudioEngine {
     this.ctx = null;
     this.source = null;
     this.gainNode = null;
-    this.corsFailed = false;
     this.listeners = new Map();
     this.currentUrl = null;
     this._cueBuffer = null;
@@ -63,8 +62,6 @@ export class AudioEngine {
     });
     a.addEventListener("timeupdate", () => {
       this.emit("time", {
-        currentTime: a.currentTime || 0,
-        duration: Number.isFinite(a.duration) ? a.duration : 0,
         live: !Number.isFinite(a.duration) || a.duration === Infinity,
       });
     });
@@ -105,17 +102,16 @@ export class AudioEngine {
     else this.audio.volume = v;
   }
 
-  async load(url, { cors = true } = {}) {
+  async load(url) {
     await this.ensureGraph();
     this._ignore = true;
     this.currentUrl = url;
-    this.corsFailed = false;
     try {
       this.audio.pause();
     } catch {
       /* empty */
     }
-    this.audio.crossOrigin = cors ? "anonymous" : null;
+    this.audio.crossOrigin = "anonymous";
     this.audio.src = playableUrl(url);
     this.audio.load();
     this.emit("status", "buffering");
@@ -127,7 +123,6 @@ export class AudioEngine {
       await this.audio.play();
     } catch (err) {
       if (this.audio.crossOrigin && this.currentUrl) {
-        this.corsFailed = true;
         this.audio.crossOrigin = null;
         const t = this.audio.currentTime;
         this.audio.load();

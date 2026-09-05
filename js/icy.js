@@ -8,7 +8,7 @@ function decodeIcyText(raw) {
   }
 }
 
-export function titleFromIcyMeta(text) {
+function titleFromIcyMeta(text) {
   const m = String(text).match(/StreamTitle='([^']*)'/i);
   return decodeIcyText(m?.[1] || "");
 }

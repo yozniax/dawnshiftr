@@ -41,8 +41,6 @@ export function defaultState() {
     cursor: 0,
     playing: false,
     status: "stopped",
-    currentTime: 0,
-    duration: 0,
     live: true,
     volume: 80,
     theme: "lamp",
@@ -50,7 +48,6 @@ export function defaultState() {
     notes: seededNotes(playlist),
     hidden: [],
     error: "",
-    nowPlaying: "",
     songTitle: "",
     sleepMinutes: null,
     sleepEndsAt: null,
@@ -88,8 +85,7 @@ export class PlayerCore {
       this.broadcast();
     });
     this.engine.on("time", (t) => {
-      this.state.currentTime = t.currentTime;
-      this.state.duration = t.duration;
+      if (this.state.live === t.live) return;
       this.state.live = t.live;
       this.broadcast("time");
     });
@@ -119,10 +115,6 @@ export class PlayerCore {
 
   broadcast(kind = "state") {
     for (const fn of this.listeners) fn(this.state, kind);
-  }
-
-  isHidden(track) {
-    return this.state.hidden.includes(trackKey(track));
   }
 
   visible(tracks) {
@@ -330,7 +322,6 @@ export class PlayerCore {
     this.state.index = ((i % this.state.playlist.length) + this.state.playlist.length) % this.state.playlist.length;
     this.state.cursor = this.state.index;
     const track = this.current();
-    this.state.nowPlaying = track.title;
     this.state.songTitle = "";
     this.state.error = "";
     this.state.status = "buffering";

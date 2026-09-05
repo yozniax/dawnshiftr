@@ -1,4 +1,4 @@
-export const FEATURED = [
+const FEATURED = [
   {
     title: "Lofi Hip Hop Radio",
     url: "https://ice4.somafm.com/groovesalad-128-mp3",
@@ -112,7 +112,7 @@ function isPlayableStation(station) {
   return true;
 }
 
-export function toTrack(station, extra = {}) {
+function toTrack(station, extra = {}) {
   return {
     id: station.stationuuid || station.url,
     title: (station.name || station.title || "Unknown").trim(),
@@ -132,7 +132,7 @@ export function featuredTracks() {
   return FEATURED.map((s, i) => toTrack(s, { id: `featured-${i}` }));
 }
 
-export async function searchStations({ name = "", tag = "", country = "", limit = 40 } = {}) {
+export async function searchStations({ name = "", country = "", limit = 40 } = {}) {
   const params = new URLSearchParams({
     hidebroken: "true",
     order: "clickcount",
@@ -140,17 +140,13 @@ export async function searchStations({ name = "", tag = "", country = "", limit 
     limit: String(limit),
   });
   if (name) params.set("name", name);
-  if (tag) params.set("tag", tag);
   if (country) params.set("countrycode", country);
   const rows = await api(`/json/stations/search?${params}`);
   return (rows || []).filter(isPlayableStation).map((s) => toTrack(s));
 }
 
 export async function topStations(limit = 40) {
-  const rows = await api(
-    `/json/stations/search?hidebroken=true&order=clickcount&reverse=true&limit=${limit}`
-  );
-  return (rows || []).filter(isPlayableStation).map((s) => toTrack(s));
+  return searchStations({ limit });
 }
 
 export async function stationsByCountry(code, limit = 80) {
@@ -200,7 +196,7 @@ export function playableUrl(url) {
   return url;
 }
 
-export async function parsePlaylist(text, sourceUrl) {
+async function parsePlaylist(text, sourceUrl) {
   const tracks = [];
   const lines = text.replace(/\r/g, "").split("\n");
   if (/\[playlist\]/i.test(text)) {

@@ -60,7 +60,7 @@ chrome.runtime.onConnect.addListener((port) => {
     offscreenPort = port;
     while (pending.length) offscreenPort.postMessage(pending.shift());
     port.onMessage.addListener((msg) => {
-      if (msg.type === "state" || msg.type === "analyser" || msg.type === "ready") {
+      if (msg.type === "state" || msg.type === "ready") {
         broadcast(msg.type === "ready" ? { type: "state", state: msg.state } : msg);
       }
     });

@@ -7,7 +7,6 @@ export const THEMES = {
     text: "#f3e6d4",
     muted: "#a8927c",
     line: "#3d3228",
-    good: "#d7c07a",
     warn: "#f0b45a",
     danger: "#e07a62",
   },
@@ -19,7 +18,6 @@ export const THEMES = {
     text: "#e4f2f0",
     muted: "#8aa3a0",
     line: "#2a3d40",
-    good: "#9fd4b8",
     warn: "#e0c56a",
     danger: "#e08a8a",
   },
@@ -31,7 +29,6 @@ export const THEMES = {
     text: "#2c241c",
     muted: "#7a6d5e",
     line: "#e0d4c2",
-    good: "#3f7a4a",
     warn: "#b07a18",
     danger: "#b44532",
   },
@@ -45,11 +42,4 @@ export function applyTheme(name) {
   for (const [key, value] of Object.entries(theme)) {
     root.style.setProperty(`--${key}`, value);
   }
-  root.dataset.theme = THEMES[name] ? name : "lamp";
-  const bg = theme.bg.replace("#", "");
-  const r = parseInt(bg.slice(0, 2), 16);
-  const g = parseInt(bg.slice(2, 4), 16);
-  const b = parseInt(bg.slice(4, 6), 16);
-  const luma = (r * 299 + g * 587 + b * 114) / 1000;
-  root.dataset.tone = luma > 160 ? "light" : "dark";
 }
