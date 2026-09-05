@@ -105,13 +105,17 @@ button, input, textarea {
   margin: 2px 0 0;
   color: var(--accent);
   font-size: 12px;
+  min-height: 1.2em;
   line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.song.empty { color: var(--muted); font-weight: 400; }
+.song.empty {
+  color: transparent;
+  visibility: hidden;
+}
 
 .now-note {
   margin: 2px 0 0;
@@ -287,7 +291,7 @@ button, input, textarea {
   background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
-#tunes-search {
+#pane-search {
   width: 100%;
   background: var(--bg-elev);
   border: 1px solid var(--line);
@@ -296,7 +300,7 @@ button, input, textarea {
   outline: none;
 }
 
-#tunes-search:focus { border-color: var(--accent); }
+#pane-search:focus { border-color: var(--accent); }
 
 .list {
   flex: 1;
@@ -304,6 +308,7 @@ button, input, textarea {
   overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--muted) transparent;
+  outline: none;
 }
 
 .track {
@@ -318,6 +323,10 @@ button, input, textarea {
 
 .track:hover, .track.is-cursor {
   background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.track.is-cursor {
+  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .track.is-playing .name { color: var(--accent); }

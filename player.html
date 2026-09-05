@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>DAWNSHIFTr</title>
-    <link rel="icon" href="icons/icon32.png" />
+    <link rel="icon" href="icons/icon32.png?v=dawn" />
     <link rel="stylesheet" href="css/player.css" />
   </head>
   <body>
@@ -16,7 +16,7 @@
 
       <section class="now-card">
         <h1 class="now-title" id="track-title">PICK A STATION</h1>
-        <p class="song" id="song-title" hidden></p>
+        <p class="song empty" id="song-title">&nbsp;</p>
         <p class="now-note empty" id="now-note" hidden></p>
         <div class="transport">
           <button type="button" class="icon-btn" id="btn-prev" title="Previous">‹</button>
@@ -37,13 +37,15 @@
       <section class="stations">
         <div class="station-toolbar">
           <div class="toolbar-btns">
+            <button type="button" data-pane="index" class="on">INDEX</button>
             <button type="button" data-pane="fav">FAV</button>
-            <button type="button" data-pane="tunes">TUNES</button>
+            <button type="button" data-pane="stations">STATIONS</button>
+            <button type="button" data-pane="history">HISTORY</button>
             <button type="button" data-pane="countries">COUNTRIES</button>
           </div>
-          <input id="tunes-search" type="search" placeholder="SEARCH…" hidden />
+          <input id="pane-search" type="search" placeholder="SEARCH…" hidden />
         </div>
-        <div class="list" id="list"></div>
+        <div class="list" id="list" tabindex="0"></div>
       </section>
     </div>
 

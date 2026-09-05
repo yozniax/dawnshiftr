@@ -21,7 +21,7 @@ Audio keeps playing in an offscreen document if you close the window.
 
 ## Features
 
-- Radio Browser search, tune history, country lists
+- Radio Browser search, play history, country lists
 - Station notes
 - Hide a station with DELETE (Show hidden restores them)
 - Sleep timer: last ~15 seconds fade, remaining time counts down
@@ -34,11 +34,12 @@ Audio keeps playing in an offscreen document if you close the window.
 | --- | --- |
 | `Space` | Play / pause |
 | `Enter` | Play cursor |
+| `↑` / `↓` | Move index cursor |
 | `x` | Delete / hide station |
 | `m` | Note |
-| `R` / `N` / `n` | Tunes / countries / fav pane |
+| `R` / `H` / `N` / `n` | Stations / history / countries / fav |
 | `S` | Sleep 10 min |
-| `Esc` | Back to queue |
+| `Esc` | Index |
 
 ## License
 

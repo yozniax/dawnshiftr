@@ -65,17 +65,18 @@ function wrapLocal(core) {
 const overlayEl = document.getElementById("overlay");
 const toastEl = document.getElementById("toast");
 const listEl = document.getElementById("list");
-const tunesSearchEl = document.getElementById("tunes-search");
+const paneSearchEl = document.getElementById("pane-search");
 
 let overlay = null;
 let toastTimer = 0;
 let analyserBins = null;
-let pane = "queue";
-let tunesQuery = "";
-let tunesItems = [];
-let tunesLoading = false;
-let tunesError = "";
-let tunesSeq = 0;
+let pane = "index";
+let stationsQuery = "";
+let stationsItems = [];
+let stationsLoading = false;
+let stationsError = "";
+let stationsSeq = 0;
+let historyQuery = "";
 let countryStations = null;
 let countryLoading = false;
 let countryError = "";
@@ -141,9 +142,11 @@ function renderOverlay() {
         <span>x</span><span>Delete / hide</span>
         <span>m</span><span>Note</span>
         <span>f</span><span>Fav</span>
-        <span>R</span><span>Tunes</span>
+        <span>R</span><span>Stations</span>
+        <span>H</span><span>History</span>
         <span>N</span><span>Countries</span>
         <span>n</span><span>Fav pane</span>
+        <span>Esc</span><span>Index</span>
         <span>S</span><span>Sleep</span>
         <span>?</span><span>This help</span>
       </div>
@@ -180,7 +183,14 @@ if (surface === "window") document.body.classList.add("windowed");
 const localCore = isExtension() ? null : new PlayerCore();
 const client = isExtension() ? new ExtensionBridge() : wrapLocal(localCore);
 
-if (!isExtension()) localCore.hydrate();
+if (!isExtension()) {
+  Promise.resolve(localCore.hydrate()).then(() => {
+    listEl.focus();
+    listEl.querySelector(".track.is-cursor")?.scrollIntoView({ block: "nearest" });
+  });
+} else {
+  listEl.focus();
+}
 
 attachEqVis(
   document.getElementById("eq-vis"),
@@ -194,7 +204,7 @@ attachEqVis(
 client.subscribe((state, kind) => {
   if (kind === "time" || kind === "sleep" || kind === "meta" || kind === "status") {
     renderChrome(state);
-    if (pane === "queue") updatePlayingHighlight(state);
+    if (pane === "index") updatePlayingHighlight(state);
     else highlightPlayingKeys(state);
     return;
   }
@@ -217,13 +227,9 @@ function renderChrome(state) {
   document.getElementById("track-title").textContent = track?.title || "PICK A STATION";
   const song = document.getElementById("song-title");
   const title = String(state.songTitle || "").trim();
-  if (title) {
-    song.hidden = false;
-    song.textContent = title;
-  } else {
-    song.hidden = true;
-    song.textContent = "";
-  }
+  song.hidden = false;
+  song.textContent = title || "\u00a0";
+  song.classList.toggle("empty", !title);
   const note = noteText(track);
   const noteEl = document.getElementById("now-note");
   noteEl.hidden = !note;
@@ -279,6 +285,7 @@ function updatePlayingHighlight(state) {
     el.classList.toggle("is-playing", i === state.index);
     el.classList.toggle("is-cursor", i === state.cursor);
   });
+  listEl.querySelector(".track.is-cursor")?.scrollIntoView({ block: "nearest" });
 }
 
 function highlightPlayingKeys(state) {
@@ -297,25 +304,33 @@ function setPane(next) {
     return;
   }
   pane = next;
-  if (pane === "tunes" && !tunesQuery) tunesItems = historyItems();
   if (pane === "countries") {
     countryStations = null;
     countryCode = "";
     countryError = "";
   }
   renderPane(client.state);
-  if (pane === "tunes") tunesSearchEl.focus();
+  if (pane === "stations" || pane === "history") paneSearchEl.focus();
+  else listEl.focus();
 }
 
 function renderPane(state) {
   document.querySelectorAll("[data-pane]").forEach((btn) => {
     btn.classList.toggle("on", btn.dataset.pane === pane);
   });
-  tunesSearchEl.hidden = pane !== "tunes";
-  if (pane === "tunes") renderTunes();
-  else if (pane === "countries") renderCountries();
+  const searchable = pane === "stations" || pane === "history";
+  paneSearchEl.hidden = !searchable;
+  if (pane === "stations") {
+    paneSearchEl.placeholder = "SEARCH STATIONS…";
+    if (paneSearchEl.value !== stationsQuery) paneSearchEl.value = stationsQuery;
+    renderStations();
+  } else if (pane === "history") {
+    paneSearchEl.placeholder = "SEARCH HISTORY…";
+    if (paneSearchEl.value !== historyQuery) paneSearchEl.value = historyQuery;
+    renderHistory();
+  } else if (pane === "countries") renderCountries();
   else if (pane === "fav") renderFav(state);
-  else renderQueue(state);
+  else renderIndex(state);
 }
 
 function listSignature(state) {
@@ -333,7 +348,7 @@ function stationRow(t, i, { history = false, queue = false } = {}) {
   return `<div class="track ${playing} ${cur}" data-i="${i}" data-key="${escapeAttr(trackKey(t))}">
     <div>
       <div class="name">${escapeHtml(t.title)}</div>
-      <div class="memo ${memo ? "" : "none"}">${escapeHtml(memo || "No note")}</div>
+      <div class="memo ${memo ? "" : "none"}">${escapeHtml([t.country, memo || "No note"].filter(Boolean).join(" · "))}</div>
     </div>
     <div class="track-side">
       <button type="button" class="mini ${fav ? "on" : ""}" data-row-act="fav">FAV</button>
@@ -369,8 +384,7 @@ function bindStationRows(tracks, { history = false, queue = false } = {}) {
       else if (act === "delete") {
         if (history) {
           await client.command("removeHistory", track);
-          tunesItems = historyItems();
-          renderTunes();
+          renderHistory();
         } else if (pane === "fav") {
           client.command("toggleFavorite", track);
         } else {
@@ -388,8 +402,8 @@ function bindStationRows(tracks, { history = false, queue = false } = {}) {
   });
 }
 
-function renderQueue(state) {
-  const sig = `queue\n${listSignature(state)}`;
+function renderIndex(state) {
+  const sig = `index\n${listSignature(state)}`;
   if (listEl.dataset.sig === sig && listEl.querySelector(".track")) {
     updatePlayingHighlight(state);
     return;
@@ -398,12 +412,13 @@ function renderQueue(state) {
   const hiddenN = state.hidden?.length || 0;
   if (!state.playlist.length) {
     listEl.innerHTML = `<div class="empty">No stations.
-      ${hiddenN ? `<div><button type="button" id="unhide-all">Show ${hiddenN} hidden</button></div>` : "Tunes or countries."}</div>`;
+      ${hiddenN ? `<div><button type="button" id="unhide-all">Show ${hiddenN} hidden</button></div>` : "Stations or countries."}</div>`;
     document.getElementById("unhide-all")?.addEventListener("click", () => client.command("unhideAll"));
     return;
   }
   listEl.innerHTML = state.playlist.map((t, i) => stationRow(t, i, { queue: true })).join("");
   bindStationRows(state.playlist, { queue: true });
+  listEl.querySelector(".track.is-cursor")?.scrollIntoView({ block: "nearest" });
 }
 
 function renderFav(state) {
@@ -422,57 +437,76 @@ function historyItems() {
   return (client.state.history || []).map((t) => t);
 }
 
-function renderTunes() {
-  tunesSearchEl.hidden = false;
-  if (tunesSearchEl.value !== tunesQuery) tunesSearchEl.value = tunesQuery;
-  const q = tunesQuery.trim();
-  if (tunesLoading) {
-    listEl.dataset.sig = "tunes-loading";
+function historyHaystack(t) {
+  return [t.title, t.country, noteText(t)].filter(Boolean).join(" ").toLowerCase();
+}
+
+function renderStations() {
+  const q = stationsQuery.trim();
+  if (stationsLoading) {
+    listEl.dataset.sig = "stations-loading";
     listEl.innerHTML = `<div class="empty">LOADING…</div>`;
     return;
   }
-  if (tunesError) {
-    listEl.dataset.sig = "tunes-err";
-    listEl.innerHTML = `<div class="empty err">ERR: ${escapeHtml(tunesError)}</div>`;
+  if (stationsError) {
+    listEl.dataset.sig = "stations-err";
+    listEl.innerHTML = `<div class="empty err">ERR: ${escapeHtml(stationsError)}</div>`;
     return;
   }
-  const tracks = q ? tunesItems : historyItems();
-  const sig = `tunes\n${q}\n${tracks.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")}`;
+  const tracks = q ? stationsItems : [];
+  const sig = `stations\n${q}\n${tracks.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")}`;
   listEl.dataset.sig = sig;
   if (!tracks.length) {
     listEl.innerHTML = `<div class="empty">${q ? "NOTHING HERE." : "TYPE TO SEARCH ALL STATIONS."}</div>`;
     return;
   }
-  listEl.innerHTML = tracks.map((t, i) => stationRow(t, i, { history: !q })).join("");
-  bindStationRows(tracks, { history: !q });
+  listEl.innerHTML = tracks.map((t, i) => stationRow(t, i)).join("");
+  bindStationRows(tracks);
 }
 
-async function searchTunes(q) {
-  const seq = ++tunesSeq;
+async function searchStationsPane(q) {
+  const seq = ++stationsSeq;
   const text = q.trim();
-  tunesQuery = q;
+  stationsQuery = q;
   if (!text) {
-    tunesLoading = false;
-    tunesError = "";
-    tunesItems = historyItems();
-    if (pane === "tunes") renderTunes();
+    stationsLoading = false;
+    stationsError = "";
+    stationsItems = [];
+    if (pane === "stations") renderStations();
     return;
   }
-  tunesLoading = true;
-  if (pane === "tunes") renderTunes();
+  stationsLoading = true;
+  if (pane === "stations") renderStations();
   try {
     const tracks = await searchStations({ name: text, limit: 50 });
-    if (seq !== tunesSeq) return;
-    tunesLoading = false;
-    tunesError = "";
-    tunesItems = tracks;
-    if (pane === "tunes") renderTunes();
+    if (seq !== stationsSeq) return;
+    stationsLoading = false;
+    stationsError = "";
+    stationsItems = tracks;
+    if (pane === "stations") renderStations();
   } catch (err) {
-    if (seq !== tunesSeq) return;
-    tunesLoading = false;
-    tunesError = err.message || "search failed";
-    if (pane === "tunes") renderTunes();
+    if (seq !== stationsSeq) return;
+    stationsLoading = false;
+    stationsError = err.message || "search failed";
+    if (pane === "stations") renderStations();
   }
+}
+
+function renderHistory() {
+  const q = historyQuery.trim().toLowerCase();
+  const tracks = historyItems().filter((t) => !q || historyHaystack(t).includes(q));
+  const sig = `history\n${q}\n${tracks.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")}`;
+  listEl.dataset.sig = sig;
+  if (!historyItems().length) {
+    listEl.innerHTML = `<div class="empty">NO HISTORY YET.</div>`;
+    return;
+  }
+  if (!tracks.length) {
+    listEl.innerHTML = `<div class="empty">NO MATCH.</div>`;
+    return;
+  }
+  listEl.innerHTML = tracks.map((t, i) => stationRow(t, i, { history: true })).join("");
+  bindStationRows(tracks, { history: true });
 }
 
 function renderCountries() {
@@ -587,14 +621,20 @@ document.querySelector(".toolbar-btns").addEventListener("click", (e) => {
 });
 
 let searchTimer = 0;
-tunesSearchEl.addEventListener("input", () => {
+paneSearchEl.addEventListener("input", () => {
   clearTimeout(searchTimer);
-  const q = tunesSearchEl.value;
-  if (!q.trim()) {
-    searchTunes("");
+  const q = paneSearchEl.value;
+  if (pane === "history") {
+    historyQuery = q;
+    renderHistory();
     return;
   }
-  searchTimer = setTimeout(() => searchTunes(q), 280);
+  if (pane !== "stations") return;
+  if (!q.trim()) {
+    searchStationsPane("");
+    return;
+  }
+  searchTimer = setTimeout(() => searchStationsPane(q), 280);
 });
 
 document.addEventListener("keydown", async (e) => {
@@ -617,9 +657,9 @@ document.addEventListener("keydown", async (e) => {
     return;
   }
 
-  if (e.key === "Escape" && pane !== "queue") {
-    pane = "queue";
-    renderPane(client.state);
+  if (e.key === "Escape" && pane !== "index") {
+    e.preventDefault();
+    setPane("index");
     return;
   }
 
@@ -640,7 +680,7 @@ document.addEventListener("keydown", async (e) => {
   }
   if (key === "Enter") {
     e.preventDefault();
-    if (pane === "queue") client.command("playIndex", s.cursor);
+    if (pane === "index") client.command("playIndex", s.cursor);
     return;
   }
   if (key === "s" && !e.shiftKey) {
@@ -649,12 +689,12 @@ document.addEventListener("keydown", async (e) => {
   }
   if (key === "ArrowDown") {
     e.preventDefault();
-    if (pane === "queue") client.command("statePatch", { cursor: Math.min(s.playlist.length - 1, s.cursor + 1) });
+    if (pane === "index") client.command("statePatch", { cursor: Math.min(s.playlist.length - 1, s.cursor + 1) });
     return;
   }
   if (key === "ArrowUp") {
     e.preventDefault();
-    if (pane === "queue") client.command("statePatch", { cursor: Math.max(0, s.cursor - 1) });
+    if (pane === "index") client.command("statePatch", { cursor: Math.max(0, s.cursor - 1) });
     return;
   }
   if (key === "ArrowRight") {
@@ -680,7 +720,12 @@ document.addEventListener("keydown", async (e) => {
   }
   if (key === "R") {
     e.preventDefault();
-    setPane("tunes");
+    setPane("stations");
+    return;
+  }
+  if (key === "H") {
+    e.preventDefault();
+    setPane("history");
     return;
   }
   if (key === "N") {
@@ -692,11 +737,11 @@ document.addEventListener("keydown", async (e) => {
     return;
   }
   if (key === "x") {
-    if (pane === "queue") client.command("hideStation", s.cursor);
+    if (pane === "index") client.command("hideStation", s.cursor);
     return;
   }
   if (key === "1" && !e.ctrlKey) {
-    pane = "queue";
+    setPane("index");
     client.command("setPlaylist", featuredTracks());
     toast("Featured");
   }
