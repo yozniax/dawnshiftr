@@ -38,11 +38,21 @@ Audio keeps playing in an offscreen document if you close the window.
 | `↑` / `↓` | Move cursor |
 | `F` / `N` / `X` | Fav / note / delete highlighted |
 | `-` / `=` | Volume down / up |
-| `S` | Stations tab |
+| `S` / `Shift+S` | Stations tab |
 | `P` | Pomodoro (25 min) |
-| `Shift+F` / `T` / `H` / `C` | Fav / stations / history / countries |
+| `Shift+F` / `H` / `C` | Fav / history / countries |
 | `Esc` | Fav / close |
 | `?` | Shortcuts |
+
+## Usage stats
+
+The player sends anonymous listen stats (favorites, listen time per station, session counts, timezone/locale). Country and city are meant to be derived on the ingest server from the request address, which is not stored.
+
+Preview ingest: `POST /v1/ingest` (writes `data/telemetry.jsonl`). Production endpoint is `js/telemetry.js` → `TELEMETRY_REMOTE` (`https://stats.doyo.be/v1/ingest`). Opt out from the Keybind dialog.
+
+Reminder: the ingest host and admin screen to read this data are not built yet.
+
+Privacy notice: `privacy.html`. A terms-of-service page is not required for this free player; a privacy policy is required if stats stay on for a public Chrome Web Store listing.
 
 ## License
 

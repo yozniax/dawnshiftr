@@ -1,6 +1,7 @@
 import { PlayerCore, isExtension, defaultState, SLEEP_PRESETS, FADE_MS, trackKey, sleepChipLabel } from "./core.js";
-import { searchStations, stationsByCountry, REGIONS } from "./radio.js";
+import { searchStations, stationsByCountry, popularStations, REGIONS } from "./radio.js";
 import { attachEqVis } from "./eq-vis.js";
+import { isEnabled, setEnabled } from "./telemetry.js";
 
 class ExtensionBridge {
   constructor() {
@@ -76,6 +77,8 @@ let stationsItems = [];
 let stationsLoading = false;
 let stationsError = "";
 let stationsSeq = 0;
+let popularItems = [];
+let popularTried = false;
 let historyQuery = "";
 let favQuery = "";
 let countryQuery = "";
@@ -148,16 +151,30 @@ function renderOverlay() {
         <span>N</span><span>Note highlighted</span>
         <span>X / D</span><span>Delete highlighted</span>
         <span>- / =</span><span>Volume down / up</span>
-        <span>S</span><span>Stations tab</span>
+        <span>S / Shift+S</span><span>Stations tab</span>
         <span>P</span><span>Pomodoro (25 min)</span>
         <span>Shift+F</span><span>Fav tab</span>
-        <span>Shift+T</span><span>Stations tab</span>
         <span>Shift+H</span><span>History tab</span>
         <span>Shift+C</span><span>Countries tab</span>
         <span>Esc</span><span>Fav / close</span>
       </div>
-      <div class="hint" style="margin-top:10px">Esc closes</div>
+      <div class="hint stats-line">
+        <button type="button" id="btn-stats">Usage stats: …</button>
+        <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy</a>
+      </div>
+      <div class="hint">Esc closes</div>
     </div>`;
+    const statsBtn = overlayEl.querySelector("#btn-stats");
+    const paintStats = (on) => {
+      statsBtn.textContent = on ? "Usage stats: on" : "Usage stats: off";
+    };
+    void isEnabled().then(paintStats);
+    statsBtn.addEventListener("click", async () => {
+      const next = !(await isEnabled());
+      await setEnabled(next);
+      paintStats(next);
+      toast(next ? "Usage stats on" : "Usage stats off");
+    });
     return;
   }
   overlayEl.innerHTML = `<div class="modal-card" role="dialog" aria-label="Station note">
@@ -331,7 +348,11 @@ function renderPane(state) {
   if (pane === "stations") {
     paneSearchEl.placeholder = "SEARCH STATIONS…";
     if (paneSearchEl.value !== stationsQuery) paneSearchEl.value = stationsQuery;
-    renderStations();
+    if (!stationsQuery.trim() && !popularItems.length) void searchStationsPane("");
+    else {
+      if (!stationsQuery.trim() && popularItems.length) stationsItems = popularItems;
+      renderStations();
+    }
   } else if (pane === "history") {
     paneSearchEl.placeholder = "SEARCH HISTORY…";
     if (paneSearchEl.value !== historyQuery) paneSearchEl.value = historyQuery;
@@ -528,7 +549,7 @@ function renderStations() {
     listEl.innerHTML = `<div class="empty err">ERR: ${escapeHtml(stationsError)}</div>`;
     return;
   }
-  const tracks = q ? stationsItems : [];
+  const tracks = stationsItems;
   const sig = `stations\n${q}\n${tracks.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")}`;
   listEl.dataset.sig = sig;
   if (!tracks.length) {
@@ -544,10 +565,33 @@ async function searchStationsPane(q) {
   const text = q.trim();
   stationsQuery = q;
   if (!text) {
-    stationsLoading = false;
     stationsError = "";
+    if (popularItems.length) {
+      stationsLoading = false;
+      stationsItems = popularItems;
+      if (pane === "stations") renderStations();
+      return;
+    }
+    if (stationsLoading) return;
+    popularTried = true;
+    stationsLoading = true;
     stationsItems = [];
     if (pane === "stations") renderStations();
+    try {
+      const rows = await popularStations(10);
+      if (seq !== stationsSeq) return;
+      popularItems = (rows || []).filter((t) => !isHiddenTrack(t)).slice(0, 10);
+      stationsLoading = false;
+      stationsItems = popularItems;
+      stationsError = popularItems.length ? "" : "NO POPULAR STATIONS.";
+      if (pane === "stations") renderStations();
+    } catch (err) {
+      if (seq !== stationsSeq) return;
+      popularTried = false;
+      stationsLoading = false;
+      stationsError = err.message || "popular failed";
+      if (pane === "stations") renderStations();
+    }
     return;
   }
   stationsLoading = true;
@@ -871,7 +915,7 @@ document.addEventListener("keydown", async (e) => {
   if (e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
     const tabs = {
       KeyF: "fav",
-      KeyT: "stations",
+      KeyS: "stations",
       KeyH: "history",
       KeyC: "countries",
     };

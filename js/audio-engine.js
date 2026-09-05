@@ -114,10 +114,12 @@ export class AudioEngine {
     if (!this.analyser || !this._freq) return out;
     this.analyser.getByteFrequencyData(this._freq);
     const n = this._freq.length;
+    const virtual = bars + 1;
     let freqPeak = 0;
     for (let i = 0; i < bars; i++) {
-      const lo = Math.max(1, Math.floor((i / bars) * n * 0.72));
-      const hi = Math.max(lo + 2, Math.floor(((i + 1) / bars) * n * 0.72));
+      const vi = i + 1;
+      const lo = Math.max(1, Math.floor((vi / virtual) * n * 0.72));
+      const hi = Math.max(lo + 2, Math.floor(((vi + 1) / virtual) * n * 0.72));
       let peak = 0;
       for (let j = lo; j < hi && j < n; j++) {
         if (this._freq[j] > peak) peak = this._freq[j];

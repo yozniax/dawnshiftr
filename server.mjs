@@ -97,6 +97,61 @@ const server = http.createServer(async (req, res) => {
   const host = req.headers.host || `127.0.0.1:${PORT}`;
   const url = new URL(req.url || "/", `http://${host}`);
 
+  if (url.pathname === "/v1/ingest") {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    if (req.method === "OPTIONS") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+    if (req.method !== "POST") {
+      res.writeHead(405, { "content-type": "text/plain" });
+      res.end("POST");
+      return;
+    }
+    const chunks = [];
+    for await (const chunk of req) chunks.push(chunk);
+    const raw = Buffer.concat(chunks);
+    if (raw.length > 200_000) {
+      res.writeHead(413, { "content-type": "text/plain" });
+      res.end("too large");
+      return;
+    }
+    let payload = null;
+    try {
+      payload = JSON.parse(raw.toString("utf8"));
+    } catch {
+      res.writeHead(400, { "content-type": "text/plain" });
+      res.end("json");
+      return;
+    }
+    if (!payload || payload.v !== 1 || !payload.installId || !Array.isArray(payload.events)) {
+      res.writeHead(400, { "content-type": "text/plain" });
+      res.end("shape");
+      return;
+    }
+    const dir = path.join(root, "data");
+    fs.mkdirSync(dir, { recursive: true });
+    const line =
+      JSON.stringify({
+        at: Date.now(),
+        geo: { country: "XX", city: "preview" },
+        v: payload.v,
+        app: payload.app || "dawnshiftr",
+        installId: String(payload.installId).slice(0, 80),
+        tz: String(payload.tz || "").slice(0, 80),
+        locale: String(payload.locale || "").slice(0, 32),
+        totals: payload.totals || {},
+        events: payload.events.slice(0, 80),
+      }) + "\n";
+    fs.appendFileSync(path.join(dir, "telemetry.jsonl"), line);
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
   if (url.pathname.startsWith("/rb/")) {
     const rest = `${url.pathname.slice(3)}${url.search}`;
     if (!rest.startsWith("/json/")) {

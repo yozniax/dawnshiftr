@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DAWNSHIFTr privacy</title>
+    <link rel="icon" href="icons/icon32.png?v=dawn" />
+    <link rel="stylesheet" href="css/player.css" />
+    <style>
+      body { overflow: auto; }
+      .page { max-width: 680px; margin: 0 auto; padding: 24px 16px 56px; text-transform: none; }
+      h1 { font-size: 22px; margin: 0 0 8px; }
+      h1 .dawn, h1 .tail { color: var(--accent); }
+      h2 { color: var(--accent); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; margin: 22px 0 8px; }
+      p, li { color: var(--text); line-height: 1.5; }
+      .muted { color: var(--muted); }
+      a { color: var(--accent); }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <h1><span class="dawn">DAWN</span>SHIFT<span class="tail">R</span> privacy</h1>
+      <p class="muted">Last updated 5 September 2026. DoYoBe / DAWNSHIFTr.</p>
+
+      <p>
+        DAWNSHIFTr can send anonymous usage stats so we can see which stations people favorite,
+        which ones they listen to longest, rough location (country and city), and how often / how long
+        each install is used. This is not tied to your name, email, or Google account.
+      </p>
+
+      <h2>What we collect</h2>
+      <ul>
+        <li>A random install ID stored on your device. It is not your identity.</li>
+        <li>Favorite stations (id, title, stream host).</li>
+        <li>Listen time per station (not the song title on the stream).</li>
+        <li>How many times this install is opened and total listen time.</li>
+        <li>Timezone and browser language.</li>
+        <li>Country and city, derived on the server from the network address of the request. That address is used only for this lookup and is not stored.</li>
+      </ul>
+
+      <h2>What we do not collect</h2>
+      <ul>
+        <li>Name, email, account, payment data.</li>
+        <li>Precise GPS.</li>
+        <li>Station notes you type.</li>
+        <li>Live track titles from the stream.</li>
+      </ul>
+
+      <h2>Opt out</h2>
+      <p>
+        Open the player, press ℹ or <kbd>?</kbd>, and use <strong>Usage stats</strong> to turn this off.
+        Events already queued on the device are dropped. Stats already received stay in aggregate form.
+      </p>
+
+      <h2>Terms</h2>
+      <p>
+        A separate terms-of-service document is not required to use this free player.
+        A privacy notice is required if usage stats are on, including for a Chrome Web Store listing.
+      </p>
+
+      <p><a href="player.html">Back to player</a> · <a href="https://www.doyo.be/" target="_blank" rel="noopener noreferrer">DoYoBe</a></p>
+    </div>
+  </body>
+</html>

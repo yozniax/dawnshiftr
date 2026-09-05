@@ -3,6 +3,7 @@ import { featuredTracks, resolveClick, unwrapStreamUrl } from "./radio.js";
 import { loadPersisted, savePersisted } from "./storage.js";
 import { IcyWatcher } from "./icy.js";
 import { parseYouTubeUrl, youtubeTrack, YouTubeEngine } from "./youtube.js";
+import { startTelemetry, recordSession, recordListen, recordFav, recordFavs } from "./telemetry.js";
 
 export const SLEEP_PRESETS = [180, 120, 60, 55, 30, 25, 10, 5, 3, 1];
 export const FADE_MS = 15_000;
@@ -84,6 +85,8 @@ export class PlayerCore {
     this._playGen = 0;
     this._switching = false;
     this._source = "radio";
+    this._listen = null;
+    this._listenIv = 0;
     this.youtube = new YouTubeEngine();
     this.engine.on("status", (status) => {
       if (this._source === "youtube") return;
@@ -94,6 +97,9 @@ export class PlayerCore {
       if (status === "playing") {
         this.state.error = "";
         this._skips = 0;
+        this.noteListenStart(this.current());
+      } else if (status === "paused" || status === "stopped") {
+        this.noteListenStop();
       }
       this.broadcast("status");
     });
@@ -117,6 +123,7 @@ export class PlayerCore {
       this.state.status = "error";
       this.state.playing = false;
       this.state.error = msg;
+      this.noteListenStop();
       this.broadcast("status");
     });
     this.youtube.on("status", (status) => {
@@ -125,7 +132,12 @@ export class PlayerCore {
       if (status === "playing") this._switching = false;
       this.state.status = status;
       this.state.playing = status === "playing";
-      if (status === "playing") this.state.error = "";
+      if (status === "playing") {
+        this.state.error = "";
+        this.noteListenStart(this.current());
+      } else if (status === "paused" || status === "stopped") {
+        this.noteListenStop();
+      }
       this.broadcast("status");
     });
     this.youtube.on("ended", () => {
@@ -141,6 +153,7 @@ export class PlayerCore {
       this.state.status = "error";
       this.state.playing = false;
       this.state.error = msg || "youtube error";
+      this.noteListenStop();
       this.broadcast("status");
     });
   }
@@ -181,6 +194,9 @@ export class PlayerCore {
       this.state.playlist = this.visible(this.state.playlist);
     }
     this.applyVolume();
+    startTelemetry();
+    void recordSession();
+    void recordFavs(this.state.favorites);
     this.broadcast();
   }
 
@@ -215,6 +231,37 @@ export class PlayerCore {
     const linear = (this.state.volume / 100) * this.fadeAmount();
     this.engine.setGain(linear);
     this.youtube.setVolume(linear * 100);
+  }
+
+  noteListenStart(track) {
+    const next = track || this.current();
+    const key = trackKey(next);
+    if (!key) return;
+    if (this._listen?.key === key) return;
+    this.noteListenStop();
+    this._listen = { track: next, key, started: Date.now() };
+    if (!this._listenIv) this._listenIv = setInterval(() => this.noteListenPulse(), 30_000);
+  }
+
+  noteListenPulse() {
+    if (!this._listen) return;
+    const now = Date.now();
+    const ms = now - this._listen.started;
+    if (ms < 30_000) return;
+    void recordListen(this._listen.track, 30_000);
+    this._listen.started += 30_000;
+  }
+
+  noteListenStop() {
+    if (!this._listen) return;
+    const ms = Date.now() - this._listen.started;
+    const track = this._listen.track;
+    this._listen = null;
+    if (this._listenIv) {
+      clearInterval(this._listenIv);
+      this._listenIv = 0;
+    }
+    void recordListen(track, ms);
   }
 
   startSleepLoop() {
@@ -372,6 +419,7 @@ export class PlayerCore {
     this.engine.stop();
     this._loadedUrl = null;
     this._streamUrl = null;
+    this.noteListenStop();
     this.state.air = { ...track };
     this.state.songTitle = "";
     this.state.live = false;
@@ -397,6 +445,7 @@ export class PlayerCore {
     if (!this.state.playlist.length) return;
     await this.unlock();
     if (!this.state.playlist.length) return;
+    this.noteListenStop();
     this.state.index = ((i % this.state.playlist.length) + this.state.playlist.length) % this.state.playlist.length;
     if (moveCursor) this.state.cursor = this.state.index;
     const queued = this.state.playlist[this.state.index];
@@ -447,6 +496,7 @@ export class PlayerCore {
   async toggle() {
     await this.unlock();
     if (this.state.status === "playing") {
+      this.noteListenStop();
       if (this._source === "youtube") this.youtube.pause();
       else this.engine.pause();
       this.state.playing = false;
@@ -458,6 +508,7 @@ export class PlayerCore {
       this.youtube.play();
       this.state.playing = true;
       this.state.status = "playing";
+      this.noteListenStart(this.current());
       this.broadcast("status");
       return;
     }
@@ -476,6 +527,7 @@ export class PlayerCore {
   }
 
   stop() {
+    this.noteListenStop();
     this.icy.stop();
     this.youtube.stop({ silent: true });
     this._source = "radio";
@@ -635,7 +687,9 @@ export class PlayerCore {
     const { file, _blobUrl, blob, ...rest } = track;
     this.state.favorites = has
       ? this.state.favorites.filter((f) => trackKey(f) !== key)
-      : [...this.state.favorites, rest];
+      : [rest, ...this.state.favorites];
+    void recordFav(rest, !has);
+    void recordFavs(this.state.favorites);
     this.broadcast();
     this.persist();
   }

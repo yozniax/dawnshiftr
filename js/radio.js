@@ -145,8 +145,19 @@ export async function searchStations({ name = "", country = "", limit = 40 } = {
   return (rows || []).filter(isPlayableStation).map((s) => toTrack(s));
 }
 
-export async function topStations(limit = 40) {
-  return searchStations({ limit });
+export async function popularStations(limit = 10) {
+  const want = Math.max(1, Math.round(Number(limit) || 10));
+  const fetchN = Math.max(want * 3, 24);
+  try {
+    const rows = await api(`/json/stations/topclick/${fetchN}?hidebroken=true`);
+    const tracks = (rows || []).filter(isPlayableStation).map((s) => toTrack(s));
+    if (tracks.length) return tracks.slice(0, want);
+  } catch {
+    /* search fallback */
+  }
+  const rows = await searchStations({ limit: fetchN });
+  if (rows.length) return rows.slice(0, want);
+  return featuredTracks().slice(0, want);
 }
 
 export async function stationsByCountry(code, limit = 80) {
