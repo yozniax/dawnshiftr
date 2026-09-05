@@ -503,7 +503,7 @@ function openSleepPicker() {
   openOverlay({
     kind: "sleep",
     title: "SLEEP TIMER",
-    hint: "Stops playback when the timer ends. Last minute fades volume, then a gong. Esc / off cancels.",
+    hint: "Stops playback when the timer ends. Last minute fades volume, then a voice says OK. Esc / off cancels.",
     query: "",
     items: names.map((name) => ({
       label: name === "off" ? "  off" : name === String(current) ? `▶ ${name} min` : `  ${name} min`,

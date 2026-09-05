@@ -155,61 +155,19 @@ export class AudioEngine {
 
   async playGong() {
     await this.ensureGraph();
-    const ctx = this.ctx;
-    const now = ctx.currentTime;
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(0.0001, now);
-    master.gain.exponentialRampToValueAtTime(0.55, now + 0.018);
-    master.gain.exponentialRampToValueAtTime(0.22, now + 0.35);
-    master.gain.exponentialRampToValueAtTime(0.0001, now + 4.8);
-    master.connect(ctx.destination);
-
-    const strike = ctx.createBufferSource();
-    const noiseLen = Math.floor(ctx.sampleRate * 0.12);
-    const noise = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
-    const data = noise.getChannelData(0);
-    for (let i = 0; i < noiseLen; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / noiseLen, 3);
+    if (!this._okBuffer) {
+      const url = new URL("../assets/ok.mp3", import.meta.url).href;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("ok cue missing");
+      this._okBuffer = await this.ctx.decodeAudioData(await res.arrayBuffer());
     }
-    strike.buffer = noise;
-    const strikeFilter = ctx.createBiquadFilter();
-    strikeFilter.type = "bandpass";
-    strikeFilter.frequency.setValueAtTime(1800, now);
-    strikeFilter.frequency.exponentialRampToValueAtTime(420, now + 0.2);
-    strikeFilter.Q.value = 0.7;
-    const strikeGain = ctx.createGain();
-    strikeGain.gain.setValueAtTime(0.9, now);
-    strikeGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
-    strike.connect(strikeFilter);
-    strikeFilter.connect(strikeGain);
-    strikeGain.connect(master);
-    strike.start(now);
-    strike.stop(now + 0.3);
-
-    const partials = [
-      { f: 92, g: 0.55, d: 4.6 },
-      { f: 138, g: 0.28, d: 3.8 },
-      { f: 184, g: 0.22, d: 3.4 },
-      { f: 247, g: 0.16, d: 2.8 },
-      { f: 311, g: 0.12, d: 2.4 },
-      { f: 412, g: 0.08, d: 1.9 },
-      { f: 523, g: 0.05, d: 1.5 },
-      { f: 740, g: 0.035, d: 1.1 },
-    ];
-    for (const p of partials) {
-      const osc = ctx.createOscillator();
-      osc.type = "sine";
-      osc.frequency.setValueAtTime(p.f * 1.035, now);
-      osc.frequency.exponentialRampToValueAtTime(p.f, now + 0.12);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, now);
-      g.gain.exponentialRampToValueAtTime(p.g, now + 0.012);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + p.d);
-      osc.connect(g);
-      g.connect(master);
-      osc.start(now);
-      osc.stop(now + p.d + 0.05);
-    }
+    const src = this.ctx.createBufferSource();
+    src.buffer = this._okBuffer;
+    const gain = this.ctx.createGain();
+    gain.gain.value = 1;
+    src.connect(gain);
+    gain.connect(this.ctx.destination);
+    src.start();
   }
 
   getAnalyser() {

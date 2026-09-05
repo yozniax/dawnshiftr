@@ -32,7 +32,7 @@ npm start
 - ビジュアライザ: spectrum / mirror / waveform / scope / particles / heartbeat
 - 21 テーマ（hackerman, winamp, tokyo-night, catppuccin…）
 - お気に入り・再生履歴・lrclib 歌詞
-- スリープタイマー（60 / 55 / 30 / 25 / 10 / 5 / 3 / 1 分）。終了で自動停止、残り 1 分からフェードアウトし、ゴングで知らせます
+- スリープタイマー（60 / 55 / 30 / 25 / 10 / 5 / 3 / 1 分）。終了で自動停止、残り 1 分からフェードアウトし、女性の声で「OK」と知らせます
 - キーボード操作（`?` で一覧）
 
 ## キー（抜粋）
