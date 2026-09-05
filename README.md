@@ -1,62 +1,45 @@
 # broamp
 
-ベッドサイド向けのラジオプレイヤーです。Chrome 拡張、またはブラウザのプレビューで動きます。局ごとにメモを残せるので、「夜作業用」「雨音が混ざる」といった聞き分けをあとから検索できます。
+A compact bedside radio for Chrome (or the local preview). Add a short note to each station, hide ones you don’t want, and use a sleep timer.
 
-Winamp / ターミナルプレイヤーのクローンではありません。スリープタイマー、帯域の違うホワイトノイズ、局メモを中心にしています。
-
-## デモ（開発サーバ）
+## Preview
 
 ```sh
 npm start
 ```
 
-ブラウザで `http://127.0.0.1:43187` を開きます。ルートはプレイヤー、`/index.html` はインストール手順です。
+Open `http://127.0.0.1:43187`. `/index.html` has install steps.
 
-## Chrome 拡張として読み込む
+## Chrome extension
 
-1. `chrome://extensions` を開く
-2. デベロッパーモードをオン
-3. **パッケージ化されていない拡張機能を読み込む**
-4. このフォルダを選択
-5. ツールバーの broamp アイコンをクリック（小さな操作ウィンドウが開きます）
+1. `chrome://extensions`
+2. Developer mode on
+3. Load unpacked → this folder
+4. Click the toolbar icon for a small player window
 
-同じアイコンをもう一度押すと、既存のウィンドウにフォーカスします。右クリックからタブ / サイドパネルも開けます。音声は offscreen document で再生されるので、ウィンドウを閉じても続きから聴けます。
+Audio keeps playing in an offscreen document if you close the window.
 
-## できること
+## Features
 
-- ラジオの選局（Radio Browser、国別、URL、ローカルファイル）
-- **局メモ** — 各チャンネルに自由記述。リストと検索の両方に出ます
-- お気に入り
-- スリープタイマー（60 / 55 / 30 / 25 / 10 / 5 / 3 / 1 分）。残り約 15 秒でフェードアウトし、英語の声で “The time is up.” と知らせます
-- ホワイトノイズ 3 種（低域 / 中域 / 高域）
-- 低音・中音・高音のトーン
-- テーマ 3 種（lamp / tide / paper）
+- Radio Browser, country lists, URL, local files
+- Station notes (searchable)
+- Hide a station with `x` (Show hidden restores them)
+- Sleep timer: last ~15 seconds fade, then a voice says “The time is up.”
+- Live song title when the stream sends ICY metadata
+- Radio-wave visual (not a music EQ)
 
-## キー（抜粋）
+## Keys
 
-| キー | 動作 |
+| Key | Action |
 | --- | --- |
-| `Space` | 再生 / 一時停止 |
-| `Enter` | カーソル位置を再生 |
-| `m` | 局メモを編集 |
-| `M` | メモした局の一覧 |
-| `f` | お気に入り |
-| `R` / `N` | ラジオ検索 / 国 |
-| `S` | スリープ |
-| `w` | ホワイトノイズ |
-| `?` | ショートカット |
+| `Space` | Play / pause |
+| `Enter` | Play cursor |
+| `x` | Hide station |
+| `m` | Note |
+| `R` / `N` | Tune / country |
+| `S` | Sleep |
+| `?` | Help |
 
-## 構成
-
-```
-manifest.json     Chrome MV3
-background.js     ウィンドウ / offscreen / メディアキー
-offscreen.html    バックグラウンド再生
-player.html       UI
-js/               エンジン・ラジオ・UI
-assets/           スリープ終了の音声
-```
-
-## ライセンス
+## License
 
 MIT.

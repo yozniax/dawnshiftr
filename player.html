@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -18,45 +18,39 @@
       </header>
 
       <section class="now-card">
-        <p class="kicker" id="now-kicker">停止中</p>
-        <h1 class="now-title" id="track-title">局を選んでください</h1>
+        <p class="kicker" id="now-kicker">Stopped</p>
+        <h1 class="now-title" id="track-title">Pick a station</h1>
+        <p class="song" id="song-title">No title yet</p>
         <p class="now-note" id="now-note"></p>
         <canvas id="viz" aria-hidden="true"></canvas>
         <div class="transport">
-          <button type="button" class="icon-btn" id="btn-prev" title="前の局">‹</button>
-          <button type="button" class="play-btn" id="btn-play" title="再生 / 一時停止">▶</button>
-          <button type="button" class="icon-btn" id="btn-next" title="次の局">›</button>
+          <button type="button" class="icon-btn" id="btn-prev" title="Previous">‹</button>
+          <button type="button" class="play-btn" id="btn-play" title="Play / pause">▶</button>
+          <button type="button" class="icon-btn" id="btn-next" title="Next">›</button>
           <label class="vol">
-            <span>音量</span>
+            <span>Vol</span>
             <input id="vol-slider" type="range" min="0" max="100" value="80" />
           </label>
         </div>
-      </section>
-
-      <section class="panel">
-        <div class="row-label">
-          <span id="sleep-label">スリープ</span>
-          <span class="hint" id="sleep-hint">終了15秒前からフェード</span>
+        <div class="sleep-wrap">
+          <div class="row-label">
+            <span id="sleep-label">Sleep</span>
+            <span class="hint" id="sleep-hint">Fade in last 15s</span>
+          </div>
+          <div class="chips" id="sleep-line"></div>
         </div>
-        <div class="chips" id="sleep-line"></div>
-        <div class="row-label">
-          <span>ノイズ</span>
-          <span class="hint">周波数の違うホワイトノイズ</span>
-        </div>
-        <div class="chips" id="noise-line"></div>
-        <div class="tone" id="tone-line"></div>
       </section>
 
       <section class="stations">
         <div class="station-toolbar">
-          <input id="station-filter" type="search" placeholder="局名やメモで絞り込み" />
+          <input id="station-filter" type="search" placeholder="Filter by name or note" />
           <div class="toolbar-btns">
-            <button type="button" data-act="radio">選局</button>
-            <button type="button" data-act="country">国</button>
+            <button type="button" data-act="radio">Tune</button>
+            <button type="button" data-act="country">Country</button>
             <button type="button" data-act="fav">★</button>
-            <button type="button" data-act="notes">メモ</button>
+            <button type="button" data-act="notes">Notes</button>
             <button type="button" data-act="url">URL</button>
-            <button type="button" data-act="file">ファイル</button>
+            <button type="button" data-act="file">File</button>
           </div>
         </div>
         <div class="list" id="list"></div>

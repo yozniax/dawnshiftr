@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Bedside radio with station notes, sleep timer, and white noise",
+  "description": "Compact bedside radio with notes and a sleep timer",
   "scripts": {
     "start": "node server.mjs",
     "preview": "node server.mjs"

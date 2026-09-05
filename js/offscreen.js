@@ -9,19 +9,6 @@ core.subscribe((state, kind) => {
   port.postMessage({ type: "state", state, kind });
 });
 
-let analyserTimer = 0;
-function pumpAnalyser() {
-  const a = core.getAnalyser();
-  if (a && core.state.status === "playing") {
-    port.postMessage({
-      type: "analyser",
-      payload: { freq: Array.from(a.freq), time: Array.from(a.time) },
-    });
-  }
-}
-
-analyserTimer = setInterval(pumpAnalyser, 45);
-
 port.onMessage.addListener((msg) => {
   if (msg?.type === "cmd") {
     Promise.resolve(core.command(msg.name, ...(msg.args || [])))

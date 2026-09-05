@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 43187);
+const nowPlaying = new Map();
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -17,6 +18,63 @@ const MIME = {
   ".map": "application/json",
   ".mp3": "audio/mpeg",
 };
+
+function rememberTitle(url, title) {
+  if (!title) return;
+  nowPlaying.set(url, { title, at: Date.now() });
+}
+
+function titleFromIcy(text) {
+  const m = String(text).match(/StreamTitle='([^']*)'/i);
+  if (!m) return "";
+  const raw = m[1].replace(/\0+$/g, "").trim();
+  try {
+    return decodeURIComponent(escape(raw));
+  } catch {
+    return raw;
+  }
+}
+
+function icyStripper(metaInt, onTitle) {
+  let buf = Buffer.alloc(0);
+  let mode = "audio";
+  let need = metaInt;
+  return (chunk) => {
+    buf = Buffer.concat([buf, chunk]);
+    const out = [];
+    while (buf.length) {
+      if (mode === "audio") {
+        const n = Math.min(need, buf.length);
+        out.push(buf.subarray(0, n));
+        buf = buf.subarray(n);
+        need -= n;
+        if (need === 0) {
+          mode = "len";
+          need = 1;
+        }
+      } else if (mode === "len") {
+        const len = buf[0] * 16;
+        buf = buf.subarray(1);
+        if (len === 0) {
+          mode = "audio";
+          need = metaInt;
+        } else {
+          mode = "meta";
+          need = len;
+        }
+      } else {
+        if (buf.length < need) break;
+        const meta = buf.subarray(0, need);
+        buf = buf.subarray(need);
+        const title = titleFromIcy(meta.toString("latin1"));
+        if (title) onTitle(title);
+        mode = "audio";
+        need = metaInt;
+      }
+    }
+    return Buffer.concat(out);
+  };
+}
 
 function sendFile(res, filePath) {
   const ext = path.extname(filePath).toLowerCase();
@@ -73,6 +131,18 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (url.pathname === "/nowplaying") {
+    const target = url.searchParams.get("url") || "";
+    const hit = nowPlaying.get(target);
+    res.writeHead(200, {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Cache-Control": "no-store",
+    });
+    res.end(JSON.stringify({ title: hit?.title || "" }));
+    return;
+  }
+
   if (url.pathname === "/proxy") {
     const target = url.searchParams.get("url") || "";
     if (!/^https?:\/\//i.test(target)) {
@@ -85,12 +155,14 @@ const server = http.createServer(async (req, res) => {
         headers: {
           "User-Agent": "broamp/1.0",
           Accept: "*/*",
+          "Icy-MetaData": "1",
         },
         redirect: "follow",
       });
       const type = incoming.headers.get("content-type") || "audio/mpeg";
+      const metaInt = Number(incoming.headers.get("icy-metaint"));
       res.writeHead(incoming.ok ? 200 : incoming.status, {
-        "Content-Type": type,
+        "Content-Type": type.split(";")[0],
         "Access-Control-Allow-Origin": "*",
         "Cache-Control": "no-store",
       });
@@ -102,10 +174,17 @@ const server = http.createServer(async (req, res) => {
       req.on("close", () => {
         reader.cancel().catch(() => {});
       });
+      const strip =
+        Number.isFinite(metaInt) && metaInt > 0
+          ? icyStripper(metaInt, (title) => rememberTitle(target, title))
+          : null;
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
-        if (!res.write(Buffer.from(value))) {
+        const chunk = Buffer.from(value);
+        const audio = strip ? strip(chunk) : chunk;
+        if (!audio.length) continue;
+        if (!res.write(audio)) {
           await new Promise((resolve) => res.once("drain", resolve));
         }
       }

@@ -3,10 +3,8 @@ export class Visualizer {
     this.canvas = canvas;
     this.ctx = canvas.getContext("2d");
     this.raf = 0;
-    this.getFrame = () => null;
     this.playing = () => false;
     this.t = 0;
-    this.smooth = [];
     this.resize();
     window.addEventListener("resize", () => this.resize());
   }
@@ -14,7 +12,7 @@ export class Visualizer {
   resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const w = this.canvas.clientWidth || 320;
-    const h = this.canvas.clientHeight || 72;
+    const h = this.canvas.clientHeight || 48;
     this.canvas.width = Math.floor(w * dpr);
     this.canvas.height = Math.floor(h * dpr);
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -22,8 +20,7 @@ export class Visualizer {
     this.h = h;
   }
 
-  start(getFrame, isPlaying) {
-    this.getFrame = getFrame;
+  start(isPlaying) {
     this.playing = isPlaying;
     cancelAnimationFrame(this.raf);
     const loop = () => {
@@ -34,62 +31,52 @@ export class Visualizer {
     this.raf = requestAnimationFrame(loop);
   }
 
-  bins(n = 36) {
-    const frame = this.getFrame();
-    const out = new Array(n).fill(0);
-    if (frame?.freq) {
-      const data = frame.freq;
-      const usable = Math.floor(data.length * 0.62);
-      for (let i = 0; i < n; i++) {
-        const a = Math.floor((i / n) * usable);
-        const b = Math.max(a + 1, Math.floor(((i + 1) / n) * usable));
-        let sum = 0;
-        for (let j = a; j < b; j++) sum += data[j];
-        out[i] = sum / (b - a) / 255;
-      }
-    } else if (this.playing()) {
-      for (let i = 0; i < n; i++) {
-        out[i] = 0.16 + 0.22 * Math.abs(Math.sin(this.t * 1.7 + i * 0.28));
-      }
-    }
-    if (!this.smooth.length) this.smooth = out.slice();
-    this.smooth = out.map((v, i) => this.smooth[i] * 0.72 + v * 0.28);
-    return this.smooth;
-  }
-
   draw() {
     const { ctx, w, h } = this;
     ctx.clearRect(0, 0, w, h);
     const css = getComputedStyle(document.documentElement);
     const accent = css.getPropertyValue("--accent").trim() || "#e4a15a";
-    const bins = this.bins();
-    const mid = h * 0.62;
-    ctx.beginPath();
-    ctx.moveTo(0, h);
-    bins.forEach((v, i) => {
-      const x = (i / (bins.length - 1)) * w;
-      const y = mid - v * (h * 0.5);
-      if (i === 0) ctx.lineTo(x, y);
-      else ctx.lineTo(x, y);
-    });
-    ctx.lineTo(w, h);
-    ctx.closePath();
-    const g = ctx.createLinearGradient(0, 0, 0, h);
-    g.addColorStop(0, accent);
-    g.addColorStop(1, "transparent");
-    ctx.globalAlpha = this.playing() ? 0.55 : 0.22;
-    ctx.fillStyle = g;
-    ctx.fill();
-    ctx.globalAlpha = this.playing() ? 0.95 : 0.4;
+    const muted = css.getPropertyValue("--muted").trim() || "#a8927c";
+    const on = this.playing();
+    const amp = on ? 0.38 : 0.12;
+    const speed = on ? 2.4 : 0.7;
+    const mid = h / 2;
+
+    ctx.strokeStyle = muted;
+    ctx.globalAlpha = 0.28;
+    ctx.lineWidth = 1;
+    const cx = 18;
+    for (let i = 0; i < 4; i++) {
+      const r = 6 + i * 9 + (on ? Math.sin(this.t * 2 + i) * 1.5 : 0);
+      ctx.beginPath();
+      ctx.arc(cx, mid, r, -Math.PI * 0.55, Math.PI * 0.55);
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = on ? 0.95 : 0.45;
     ctx.strokeStyle = accent;
-    ctx.lineWidth = 1.6;
+    ctx.lineWidth = 1.4;
     ctx.beginPath();
-    bins.forEach((v, i) => {
-      const x = (i / (bins.length - 1)) * w;
-      const y = mid - v * (h * 0.5);
-      if (i === 0) ctx.moveTo(x, y);
+    for (let x = 0; x <= w; x++) {
+      const u = x / w;
+      const y =
+        mid +
+        Math.sin(u * Math.PI * 10 + this.t * speed) * h * amp * (0.45 + 0.55 * Math.sin(u * Math.PI)) +
+        Math.sin(u * Math.PI * 22 + this.t * speed * 1.7) * h * amp * 0.18;
+      if (x === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
-    });
+    }
+    ctx.stroke();
+
+    ctx.globalAlpha = on ? 0.35 : 0.12;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 0; x <= w; x++) {
+      const u = x / w;
+      const y = mid + Math.sin(u * Math.PI * 7 - this.t * speed * 0.8) * h * amp * 0.55;
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
     ctx.stroke();
     ctx.globalAlpha = 1;
   }

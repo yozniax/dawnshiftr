@@ -1,4 +1,4 @@
-import { PlayerCore, isExtension, defaultState, SLEEP_PRESETS, FADE_MS, NOISE_PRESETS, trackKey } from "./core.js";
+import { PlayerCore, isExtension, defaultState, SLEEP_PRESETS, FADE_MS, trackKey } from "./core.js";
 import { applyTheme, THEME_NAMES, THEMES } from "./themes.js";
 import { Visualizer } from "./visualizer.js";
 import { searchStations, topStations, stationsByCountry, featuredTracks, loadFromUrl, REGIONS } from "./radio.js";
@@ -7,14 +7,12 @@ class ExtensionBridge {
   constructor() {
     this.state = defaultState();
     this.listeners = new Set();
-    this._analyser = null;
     this.port = chrome.runtime.connect({ name: "ui" });
     this.port.onMessage.addListener((msg) => {
       if (msg?.type === "state") {
         this.state = msg.state;
         for (const fn of this.listeners) fn(this.state, msg.kind);
       }
-      if (msg?.type === "analyser") this._analyser = msg.payload;
     });
     this.port.postMessage({ type: "hello" });
   }
@@ -27,10 +25,6 @@ class ExtensionBridge {
 
   async command(name, ...args) {
     this.port.postMessage({ type: "cmd", name, args });
-  }
-
-  getAnalyser() {
-    return this._analyser;
   }
 
   isFavorite(track) {
@@ -55,9 +49,6 @@ function wrapLocal(core) {
     },
     command(name, ...args) {
       if (typeof core[name] === "function") return core[name](...args);
-    },
-    getAnalyser() {
-      return core.getAnalyser();
     },
     isFavorite(track) {
       return core.isFavorite(track);
@@ -113,13 +104,6 @@ function escapeAttr(s) {
   return escapeHtml(s).replaceAll('"', "&quot;");
 }
 
-function fmtTime(sec) {
-  if (!Number.isFinite(sec) || sec < 0) return "0:00";
-  const s = Math.floor(sec % 60);
-  const m = Math.floor(sec / 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
 function fmtSleep(ms) {
   const s = Math.max(0, Math.ceil(ms / 1000));
   const m = Math.floor(s / 60);
@@ -134,32 +118,30 @@ function renderOverlay() {
   if (!overlay) return;
   const { kind, title, hint, items = [], cursor = 0, query = "", loading, error, body } = overlay;
   if (kind === "help") {
-    overlayEl.innerHTML = `<h2>ショートカット</h2>
+    overlayEl.innerHTML = `<h2>Keys</h2>
       <div class="keys">
-        <span>Space</span><span>再生 / 一時停止</span>
-        <span>Enter</span><span>カーソルの局を再生</span>
-        <span>↑ ↓</span><span>局リストを移動</span>
-        <span>m</span><span>この局にメモ</span>
-        <span>f</span><span>お気に入り</span>
-        <span>R</span><span>ラジオ検索</span>
-        <span>N</span><span>国から選局</span>
-        <span>S</span><span>スリープ</span>
-        <span>w</span><span>ホワイトノイズ</span>
-        <span>u</span><span>URL を開く</span>
-        <span>o</span><span>ローカルファイル</span>
-        <span>?</span><span>この画面</span>
+        <span>Space</span><span>Play / pause</span>
+        <span>Enter</span><span>Play cursor</span>
+        <span>↑ ↓</span><span>Move list</span>
+        <span>x</span><span>Hide station</span>
+        <span>m</span><span>Edit note</span>
+        <span>f</span><span>Favorite</span>
+        <span>R</span><span>Tune</span>
+        <span>N</span><span>Country</span>
+        <span>S</span><span>Sleep</span>
+        <span>?</span><span>This help</span>
       </div>
-      <div class="hint" style="margin-top:10px">Esc で閉じる</div>`;
+      <div class="hint" style="margin-top:10px">Esc closes</div>`;
     return;
   }
   if (kind === "memo") {
-    overlayEl.innerHTML = `<h2>局メモ</h2>
+    overlayEl.innerHTML = `<h2>Station note</h2>
       <div class="hint">${escapeHtml(overlay.track?.title || "")}</div>
-      <textarea id="memo-text" rows="5" placeholder="例: 夜作業向け。ボーカル少なめ、雨音が混ざる">${escapeHtml(body || "")}</textarea>
+      <textarea id="memo-text" rows="4" placeholder="e.g. Night work, few vocals">${escapeHtml(body || "")}</textarea>
       <div class="overlay-actions">
-        <button type="button" class="primary" data-memo="save">保存</button>
-        <button type="button" data-memo="clear">削除</button>
-        <button type="button" data-memo="cancel">閉じる</button>
+        <button type="button" class="primary" data-memo="save">Save</button>
+        <button type="button" data-memo="clear">Clear</button>
+        <button type="button" data-memo="cancel">Close</button>
       </div>`;
     overlayEl.querySelectorAll("[data-memo]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -171,26 +153,26 @@ function renderOverlay() {
         const text = act === "clear" ? "" : overlayEl.querySelector("#memo-text")?.value || "";
         client.command("setStationNote", overlay.track, text);
         closeOverlay();
-        toast(text.trim() ? "メモを保存しました" : "メモを消しました");
+        toast(text.trim() ? "Note saved" : "Note cleared");
       });
     });
     return;
   }
   if (kind === "url") {
-    overlayEl.innerHTML = `<h2>URL を再生</h2>
-      <div class="hint">ストリーム、M3U / PLS</div>
+    overlayEl.innerHTML = `<h2>Open URL</h2>
+      <div class="hint">Stream or M3U / PLS</div>
       <input type="text" placeholder="https://…" value="${escapeAttr(query)}" />`;
     bindOverlayInput();
     return;
   }
   overlayEl.innerHTML = `<h2>${escapeHtml(title || kind.toUpperCase())}</h2>
-    <div class="hint">${escapeHtml(hint || "↑↓ で移動 · Enter で決定 · Esc で閉じる")}</div>
-    ${kind === "radio" || kind === "filter" || kind === "theme" ? `<input type="search" placeholder="絞り込み…" value="${escapeAttr(query)}" />` : ""}
+    <div class="hint">${escapeHtml(hint || "↑↓ move · Enter select · Esc close")}</div>
+    ${kind === "radio" ? `<input type="search" placeholder="Search…" value="${escapeAttr(query)}" />` : ""}
     <div class="results" id="overlay-results"></div>`;
   const box = overlayEl.querySelector("#overlay-results");
-  if (loading) box.innerHTML = `<div class="empty">読み込み中…</div>`;
+  if (loading) box.innerHTML = `<div class="empty">Loading…</div>`;
   else if (error) box.innerHTML = `<div class="empty err">ERR: ${escapeHtml(error)}</div>`;
-  else if (!items.length) box.innerHTML = `<div class="empty">見つかりませんでした。</div>`;
+  else if (!items.length) box.innerHTML = `<div class="empty">Nothing here.</div>`;
   else {
     box.innerHTML = items
       .map((it, i) => {
@@ -231,9 +213,9 @@ async function activateOverlay() {
     try {
       const tracks = await loadFromUrl(raw);
       await client.command("setPlaylist", tracks);
-      toast(`${tracks.length} 件を読み込みました`);
+      toast(`Loaded ${tracks.length}`);
     } catch (err) {
-      toast(err.message || "読み込みに失敗しました");
+      toast(err.message || "Load failed");
     }
     return;
   }
@@ -254,36 +236,39 @@ if (!isExtension()) localCore.hydrate();
 
 applyTheme(client.state.theme);
 const vis = new Visualizer(document.getElementById("viz"));
-vis.start(
-  () => client.getAnalyser(),
-  () => client.state.status === "playing"
-);
+vis.start(() => client.state.status === "playing");
 
 client.subscribe((state, kind) => {
   applyTheme(state.theme);
-  if (kind === "time" || kind === "sleep") renderChrome(state);
+  if (kind === "time" || kind === "sleep" || kind === "meta") renderChrome(state);
   else render(state);
 });
 
 function statusCopy(state) {
-  if (state.status === "error") return `エラー: ${state.error || "再生できません"}`;
-  if (state.status === "buffering") return "接続中…";
-  if (state.status === "playing") return state.noiseId ? "ノイズ再生中" : state.live ? "配信中" : "再生中";
-  if (state.status === "paused") return "一時停止";
-  return "停止中";
+  if (state.status === "error") return `Error: ${state.error || "can't play"}`;
+  if (state.status === "buffering") return "Tuning…";
+  if (state.status === "playing") return state.live ? "On air" : "Playing";
+  if (state.status === "paused") return "Paused";
+  return "Stopped";
 }
 
 function renderChrome(state) {
   const track = state.playlist[state.index];
-  const noise = NOISE_PRESETS.find((p) => p.id === state.noiseId);
-  document.getElementById("source-label").textContent = noise ? "Noise" : track?.kind === "file" ? "File" : "Radio";
-  document.getElementById("now-kicker").textContent = `${statusCopy(state)}  ·  ${
-    state.live ? "LIVE" : `${fmtTime(state.currentTime)} / ${fmtTime(state.duration)}`
-  }`;
-  document.getElementById("track-title").textContent = noise?.title || track?.title || "局を選んでください";
-  const note = noise ? "スリープ用の帯域ノイズ。局の音は止まります。" : noteText(track);
+  document.getElementById("source-label").textContent = track?.kind === "file" ? "File" : "Radio";
+  document.getElementById("now-kicker").textContent = statusCopy(state);
+  document.getElementById("track-title").textContent = track?.title || "Pick a station";
+  const song = document.getElementById("song-title");
+  const title = state.songTitle;
+  if (title) {
+    song.textContent = title;
+    song.classList.remove("empty");
+  } else {
+    song.textContent = state.status === "playing" || state.status === "buffering" ? "Waiting for title…" : "No title yet";
+    song.classList.add("empty");
+  }
+  const note = noteText(track);
   const noteEl = document.getElementById("now-note");
-  noteEl.textContent = note || "メモなし · クリックしてこの局のメモを書く";
+  noteEl.textContent = note || "Tap to add a note";
   noteEl.classList.toggle("empty", !note);
   document.getElementById("btn-play").textContent = state.status === "playing" ? "❚❚" : "▶";
   const vol = document.getElementById("vol-slider");
@@ -293,8 +278,6 @@ function renderChrome(state) {
 
 function render(state) {
   renderChrome(state);
-  renderNoise(state);
-  renderTone(state);
   renderThemes(state);
   renderList(state);
 }
@@ -303,52 +286,26 @@ function renderSleep(state) {
   const el = document.getElementById("sleep-line");
   const remaining = state.sleepEndsAt ? state.sleepRemainingMs || Math.max(0, state.sleepEndsAt - Date.now()) : 0;
   const fading = Boolean(state.sleepEndsAt) && remaining <= FADE_MS;
-  const chips = SLEEP_PRESETS.map((mins) => {
+  el.innerHTML = SLEEP_PRESETS.map((mins) => {
     const on = state.sleepMinutes === mins ? "on" : "";
     return `<button type="button" class="chip ${on}" data-sleep="${mins}">${mins}</button>`;
   }).join("");
-  el.innerHTML = `${chips}<span class="chip" style="pointer-events:none;border:0">分</span>`;
   const label = document.getElementById("sleep-label");
   const hint = document.getElementById("sleep-hint");
   if (label) {
-    label.textContent = state.sleepEndsAt ? `スリープ  ${fmtSleep(remaining)}` : "スリープ";
+    label.textContent = state.sleepEndsAt ? `Sleep  ${fmtSleep(remaining)}` : "Sleep";
     label.classList.toggle("counting", Boolean(state.sleepEndsAt));
     label.classList.toggle("fading", fading);
   }
   if (hint) {
-    if (!state.sleepEndsAt) hint.textContent = "終了15秒前からフェード";
-    else if (fading) hint.innerHTML = `<button type="button" class="hint-cancel" data-sleep="off">フェード中 · 解除</button>`;
-    else hint.innerHTML = `<button type="button" class="hint-cancel" data-sleep="off">解除</button>`;
+    const mode = !state.sleepEndsAt ? "idle" : fading ? "fade" : "on";
+    if (hint.dataset.mode !== mode) {
+      hint.dataset.mode = mode;
+      if (mode === "idle") hint.textContent = "Fade in last 15s";
+      else if (mode === "fade") hint.innerHTML = `<button type="button" class="hint-cancel" data-sleep="off">Fading · cancel</button>`;
+      else hint.innerHTML = `<button type="button" class="hint-cancel" data-sleep="off">Cancel</button>`;
+    }
   }
-}
-
-function renderNoise(state) {
-  const el = document.getElementById("noise-line");
-  el.innerHTML = NOISE_PRESETS.map(
-    (p) => `<button type="button" class="chip ${state.noiseId === p.id && state.status === "playing" ? "on" : ""}" data-noise="${p.id}">${p.label}</button>`
-  ).join("");
-}
-
-function renderTone(state) {
-  const t = state.tone || { bass: 0, mid: 0, treble: 0 };
-  const box = document.getElementById("tone-line");
-  if (box.contains(document.activeElement) && box.querySelector("[data-tone]")) {
-    box.querySelectorAll("[data-tone]").forEach((input) => {
-      if (document.activeElement !== input) input.value = String(t[input.dataset.tone] ?? 0);
-    });
-    return;
-  }
-  const rows = [
-    ["bass", "低音", t.bass],
-    ["mid", "中音", t.mid],
-    ["treble", "高音", t.treble],
-  ];
-  box.innerHTML = rows
-    .map(
-      ([id, label, val]) =>
-        `<span>${label}</span><input type="range" min="-12" max="12" value="${val}" data-tone="${id}" />`
-    )
-    .join("");
 }
 
 function renderThemes(state) {
@@ -368,12 +325,15 @@ function renderList(state) {
       const memo = noteText(t).toLowerCase();
       return t.title.toLowerCase().includes(q) || memo.includes(q);
     });
+  const hiddenN = state.hidden?.length || 0;
   if (!state.playlist.length) {
-    listEl.innerHTML = `<div class="empty">キューは空です。選局、国、URL、ファイルから追加できます。</div>`;
+    listEl.innerHTML = `<div class="empty">No stations.
+      ${hiddenN ? `<div><button type="button" id="unhide-all">Show ${hiddenN} hidden</button></div>` : "Tune, country, URL, or a file."}</div>`;
+    document.getElementById("unhide-all")?.addEventListener("click", () => client.command("unhideAll"));
     return;
   }
   if (!rows.length) {
-    listEl.innerHTML = `<div class="empty">「${escapeHtml(listFilter)}」に合う局がありません。メモの文言でも検索できます。</div>`;
+    listEl.innerHTML = `<div class="empty">No match for “${escapeHtml(listFilter)}”.</div>`;
     return;
   }
   listEl.innerHTML = rows
@@ -385,18 +345,19 @@ function renderList(state) {
       return `<div class="track ${playing} ${cur}" data-i="${i}">
         <div>
           <div class="name">${escapeHtml(t.title)}</div>
-          <div class="memo ${memo ? "" : "none"}">${escapeHtml(memo || "メモなし")}</div>
+          <div class="memo ${memo ? "" : "none"}">${escapeHtml(memo || "No note")}</div>
         </div>
         <div class="track-side">
-          <button type="button" class="mini" data-fav="${i}" title="お気に入り">${star}</button>
-          <button type="button" class="mini" data-memo="${i}" title="メモ">メモ</button>
+          <button type="button" class="mini" data-fav="${i}" title="Favorite">${star}</button>
+          <button type="button" class="mini" data-memo="${i}" title="Note">note</button>
+          <button type="button" class="mini hide" data-hide="${i}" title="Hide">x</button>
         </div>
       </div>`;
     })
     .join("");
   listEl.querySelectorAll(".track").forEach((el) => {
     el.addEventListener("click", (e) => {
-      if (e.target.closest("[data-fav],[data-memo]")) return;
+      if (e.target.closest("[data-fav],[data-memo],[data-hide]")) return;
       const i = Number(el.dataset.i);
       client.command("statePatch", { cursor: i });
       client.command("playIndex", i);
@@ -405,8 +366,7 @@ function renderList(state) {
   listEl.querySelectorAll("[data-fav]").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      const t = state.playlist[Number(btn.dataset.fav)];
-      client.command("toggleFavorite", t);
+      client.command("toggleFavorite", state.playlist[Number(btn.dataset.fav)]);
     });
   });
   listEl.querySelectorAll("[data-memo]").forEach((btn) => {
@@ -415,23 +375,30 @@ function renderList(state) {
       openMemo(state.playlist[Number(btn.dataset.memo)]);
     });
   });
-  listEl.querySelector(".is-cursor")?.scrollIntoView({ block: "nearest" });
+  listEl.querySelectorAll("[data-hide]").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      client.command("hideStation", Number(btn.dataset.hide));
+    });
+  });
 }
 
 function openMemo(track) {
   if (!track) return;
-  openOverlay({
-    kind: "memo",
-    track,
-    body: noteText(track),
-  });
+  openOverlay({ kind: "memo", track, body: noteText(track) });
+}
+
+function playPicked(track) {
+  client.command("unhideKey", trackKey(track));
+  client.command("unlock");
+  return client.command("setPlaylist", [track, ...client.state.playlist.filter((t) => t.url !== track.url)]);
 }
 
 function openRadio(seed = "") {
   openOverlay({
     kind: "radio",
-    title: "ラジオを探す",
-    hint: "Enter で再生 · a でリストに追加。メモ済みの局は下にメモが出ます。",
+    title: "Tune",
+    hint: "Enter to play · a to append. Notes show under known stations.",
     query: seed,
     items: [],
     cursor: 0,
@@ -462,8 +429,7 @@ function openRadio(seed = "") {
     },
     async onPick(item) {
       closeOverlay();
-      client.command("unlock");
-      await client.command("setPlaylist", [item.track, ...client.state.playlist.filter((t) => t.url !== item.track.url)]);
+      await playPicked(item.track);
     },
   });
   overlay.onQuery(seed);
@@ -472,8 +438,8 @@ function openRadio(seed = "") {
 function openCountries() {
   openOverlay({
     kind: "countries",
-    title: "国から選局",
-    hint: "国を選ぶとその国の局がリストになります。",
+    title: "Country",
+    hint: "Load stations from a country.",
     items: REGIONS.map((r) => ({ label: r.name, sub: r.code, code: r.code })),
     cursor: 0,
     async onPick(item) {
@@ -484,7 +450,7 @@ function openCountries() {
         const tracks = await stationsByCountry(item.code, 60);
         closeOverlay();
         if (!tracks.length) {
-          toast("局が見つかりませんでした");
+          toast("No stations");
           return;
         }
         client.command("unlock");
@@ -505,10 +471,10 @@ function openSleepPicker() {
   const names = [...SLEEP_PRESETS.map(String), "off"];
   openOverlay({
     kind: "sleep",
-    title: "スリープタイマー",
-    hint: "時間になると止まります。最後の約15秒で音量を下げ、英語の声で The time is up. と知らせます。",
+    title: "Sleep timer",
+    hint: "Stops playback. Last ~15 seconds fade, then a voice says The time is up.",
     items: names.map((name) => ({
-      label: name === "off" ? "オフ" : `${name} 分`,
+      label: name === "off" ? "Off" : `${name} min`,
       value: name,
     })),
     cursor: Math.max(0, names.indexOf(current != null ? String(current) : "off")),
@@ -520,36 +486,18 @@ function openSleepPicker() {
   });
 }
 
-function openNoisePicker() {
-  openOverlay({
-    kind: "noise",
-    title: "ホワイトノイズ",
-    hint: "低域・中域・高域。もう一度押すと止まります。",
-    items: NOISE_PRESETS.map((p) => ({
-      label: p.title,
-      value: p.id,
-    })),
-    cursor: Math.max(0, NOISE_PRESETS.findIndex((p) => p.id === client.state.noiseId)),
-    async onPick(item) {
-      closeOverlay();
-      client.command("unlock");
-      client.command("playNoise", item.value);
-    },
-  });
-}
-
 function openNoted() {
   const tracks = Object.values(client.state.notes || {})
     .filter((n) => n?.url)
     .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
   if (!tracks.length) {
-    toast("メモした局はまだありません");
+    toast("No notes yet");
     return;
   }
   openOverlay({
     kind: "notes",
-    title: "メモした局",
-    hint: "メモを手がかりに選局できます。",
+    title: "Noted stations",
+    hint: "Pick a station you already described.",
     items: tracks.map((n) => ({
       label: n.title,
       sub: n.text,
@@ -558,15 +506,13 @@ function openNoted() {
     cursor: 0,
     async onPick(item) {
       closeOverlay();
-      client.command("unlock");
-      await client.command("setPlaylist", [item.track, ...client.state.playlist.filter((t) => t.url !== item.track.url)]);
+      await playPicked(item.track);
     },
   });
 }
 
 document.getElementById("track-title").addEventListener("click", () => client.command("toggle"));
 document.getElementById("now-note").addEventListener("click", () => {
-  if (client.state.noiseId) return;
   openMemo(client.state.playlist[client.state.index]);
 });
 document.getElementById("btn-play").addEventListener("click", () => client.command("toggle"));
@@ -576,25 +522,12 @@ document.getElementById("vol-slider").addEventListener("input", (e) => {
   client.command("setVolume", Number(e.target.value));
 });
 
-document.querySelector(".panel").addEventListener("click", (e) => {
+document.querySelector(".now-card").addEventListener("click", (e) => {
   const btn = e.target.closest("[data-sleep]");
   if (!btn) return;
   const value = btn.dataset.sleep;
   if (value === "off") client.command("clearSleepTimer");
   else client.command("setSleepTimer", Number(value));
-});
-
-document.getElementById("noise-line").addEventListener("click", (e) => {
-  const btn = e.target.closest("[data-noise]");
-  if (!btn) return;
-  client.command("unlock");
-  client.command("playNoise", btn.dataset.noise);
-});
-
-document.getElementById("tone-line").addEventListener("input", (e) => {
-  const input = e.target.closest("[data-tone]");
-  if (!input) return;
-  client.command("setTone", { [input.dataset.tone]: Number(input.value) });
 });
 
 document.getElementById("theme-dots").addEventListener("click", (e) => {
@@ -609,7 +542,7 @@ document.querySelector(".toolbar-btns").addEventListener("click", (e) => {
   if (act === "radio") openRadio();
   if (act === "country") openCountries();
   if (act === "fav") {
-    if (!client.state.favorites?.length) toast("お気に入りはまだありません");
+    if (!client.state.favorites?.length) toast("No favorites yet");
     else client.command("loadFavorites");
   }
   if (act === "notes") openNoted();
@@ -634,7 +567,7 @@ fileInput.addEventListener("change", async () => {
     kind: "file",
   }));
   await client.command("setPlaylist", tracks);
-  toast(`${tracks.length} ファイル`);
+  toast(`${tracks.length} files`);
 });
 
 document.addEventListener("keydown", async (e) => {
@@ -650,7 +583,7 @@ document.addEventListener("keydown", async (e) => {
         const text = overlayEl.querySelector("#memo-text")?.value || "";
         client.command("setStationNote", overlay.track, text);
         closeOverlay();
-        toast("メモを保存しました");
+        toast("Note saved");
       }
       return;
     }
@@ -681,8 +614,9 @@ document.addEventListener("keydown", async (e) => {
     if (e.key === "a" && overlay.kind === "radio" && overlay.items?.[overlay.cursor]) {
       e.preventDefault();
       const t = overlay.items[overlay.cursor].track;
+      client.command("unhideKey", trackKey(t));
       await client.command("appendTracks", [t]);
-      toast("リストに追加しました");
+      toast("Added");
     }
     return;
   }
@@ -714,14 +648,12 @@ document.addEventListener("keydown", async (e) => {
   }
   if (key === "ArrowDown") {
     e.preventDefault();
-    const next = Math.min(s.playlist.length - 1, s.cursor + 1);
-    client.command("statePatch", { cursor: next });
+    client.command("statePatch", { cursor: Math.min(s.playlist.length - 1, s.cursor + 1) });
     return;
   }
   if (key === "ArrowUp") {
     e.preventDefault();
-    const next = Math.max(0, s.cursor - 1);
-    client.command("statePatch", { cursor: next });
+    client.command("statePatch", { cursor: Math.max(0, s.cursor - 1) });
     return;
   }
   if (key === "ArrowRight") {
@@ -738,15 +670,11 @@ document.addEventListener("keydown", async (e) => {
   }
   if (key === "f") {
     client.command("toggleFavorite", s.playlist[s.cursor]);
-    toast("お気に入りを更新しました");
+    toast("Favorite updated");
     return;
   }
   if (key === "S") {
     openSleepPicker();
-    return;
-  }
-  if (key === "w") {
-    openNoisePicker();
     return;
   }
   if (key === "R") {
@@ -767,7 +695,7 @@ document.addEventListener("keydown", async (e) => {
     return;
   }
   if (key === "n") {
-    if (!s.favorites?.length) toast("お気に入りはまだありません");
+    if (!s.favorites?.length) toast("No favorites yet");
     else client.command("loadFavorites");
     return;
   }
@@ -780,11 +708,11 @@ document.addEventListener("keydown", async (e) => {
     return;
   }
   if (key === "x") {
-    client.command("removeAt", s.cursor);
+    client.command("hideStation", s.cursor);
     return;
   }
   if (key === "1" && !e.ctrlKey) {
     client.command("setPlaylist", featuredTracks());
-    toast("おすすめ局");
+    toast("Featured");
   }
 });

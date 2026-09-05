@@ -1,16 +1,11 @@
 import { AudioEngine } from "./audio-engine.js";
-import { clampTone, TONE_DEFAULT } from "./eq.js";
 import { featuredTracks, resolveClick, unwrapStreamUrl } from "./radio.js";
 import { THEME_NAMES } from "./themes.js";
 import { loadPersisted, savePersisted } from "./storage.js";
+import { IcyWatcher } from "./icy.js";
 
 export const SLEEP_PRESETS = [60, 55, 30, 25, 10, 5, 3, 1];
 export const FADE_MS = 15_000;
-export const NOISE_PRESETS = [
-  { id: "low", label: "低域", title: "ホワイトノイズ · 低域" },
-  { id: "mid", label: "中域", title: "ホワイトノイズ · 中域" },
-  { id: "high", label: "高域", title: "ホワイトノイズ · 高域" },
-];
 
 export function trackKey(t) {
   return t?.id || t?.url || "";
@@ -18,9 +13,9 @@ export function trackKey(t) {
 
 function seededNotes(playlist) {
   const seeds = [
-    [0, "夜作業向け。テンポが安定して、ボーカルが少ない"],
-    [3, "寝る前。空間が広く、変化が少ない"],
-    [6, "集中用のドローン。声はほぼ入らない"],
+    [0, "Late work. Steady beat, few vocals"],
+    [3, "Before sleep. Wide and slow"],
+    [6, "Focus drone. Almost no voice"],
   ];
   const notes = {};
   for (const [i, text] of seeds) {
@@ -50,16 +45,16 @@ export function defaultState() {
     duration: 0,
     live: true,
     volume: 80,
-    tone: { ...TONE_DEFAULT },
     theme: "lamp",
     favorites: [],
     notes: seededNotes(playlist),
+    hidden: [],
     error: "",
     nowPlaying: "",
+    songTitle: "",
     sleepMinutes: null,
     sleepEndsAt: null,
     sleepRemainingMs: 0,
-    noiseId: null,
   };
 }
 
@@ -72,7 +67,9 @@ export class PlayerCore {
     this.engine = engine || new AudioEngine();
     this.state = defaultState();
     this.listeners = new Set();
+    this.icy = new IcyWatcher();
     this._loadedUrl = null;
+    this._streamUrl = null;
     this._skips = 0;
     this._sleepIv = 0;
     this._lastSleepSec = -1;
@@ -92,7 +89,7 @@ export class PlayerCore {
       this.state.live = t.live;
       this.broadcast("time");
     });
-    this.engine.on("ended", () => this.next({ fromEnded: true }));
+    this.engine.on("ended", () => this.next());
     this.engine.on("error", (msg) => {
       if (this._skips < 6 && this.state.playlist.length > 1) {
         this._skips += 1;
@@ -116,19 +113,22 @@ export class PlayerCore {
     for (const fn of this.listeners) fn(this.state, kind);
   }
 
+  isHidden(track) {
+    return this.state.hidden.includes(trackKey(track));
+  }
+
+  visible(tracks) {
+    const hidden = new Set(this.state.hidden);
+    return tracks.filter((t) => !hidden.has(trackKey(t)));
+  }
+
   async hydrate() {
     const saved = await loadPersisted();
     if (saved.theme && THEME_NAMES.includes(saved.theme)) this.state.theme = saved.theme;
-    if (saved.tone && typeof saved.tone === "object") {
-      this.state.tone = {
-        bass: clampTone(saved.tone.bass),
-        mid: clampTone(saved.tone.mid),
-        treble: clampTone(saved.tone.treble),
-      };
-    }
     if (typeof saved.volume === "number") this.state.volume = Math.max(0, Math.min(100, saved.volume));
     if (Array.isArray(saved.favorites)) this.state.favorites = saved.favorites;
     if (saved.notes && typeof saved.notes === "object") this.state.notes = saved.notes;
+    if (Array.isArray(saved.hidden)) this.state.hidden = saved.hidden.filter(Boolean);
     if (typeof saved.sleepEndsAt === "number" && saved.sleepEndsAt > Date.now()) {
       this.state.sleepEndsAt = saved.sleepEndsAt;
       this.state.sleepMinutes = saved.sleepMinutes ?? null;
@@ -136,11 +136,13 @@ export class PlayerCore {
       this.armSleepAlarm();
     }
     if (Array.isArray(saved.playlist) && saved.playlist.length) {
-      this.state.playlist = saved.playlist;
-      this.state.index = Math.min(saved.index ?? 0, saved.playlist.length - 1);
+      this.state.playlist = this.visible(saved.playlist);
+      this.state.index = Math.min(saved.index ?? 0, Math.max(0, this.state.playlist.length - 1));
       this.state.cursor = this.state.index;
+    } else {
+      this.state.playlist = this.visible(this.state.playlist);
     }
-    this.applyAudioSettings();
+    this.applyVolume();
     this.broadcast();
   }
 
@@ -148,20 +150,15 @@ export class PlayerCore {
     const s = this.state;
     return savePersisted({
       theme: s.theme,
-      tone: s.tone,
       volume: s.volume,
       favorites: s.favorites,
       notes: s.notes,
+      hidden: s.hidden,
       sleepEndsAt: s.sleepEndsAt,
       sleepMinutes: s.sleepMinutes,
       playlist: s.playlist.map(({ blob, file, _blobUrl, ...rest }) => rest),
       index: s.index,
     });
-  }
-
-  applyAudioSettings() {
-    this.engine.setTone(this.state.tone);
-    this.applyVolume();
   }
 
   sleepRemaining() {
@@ -295,7 +292,7 @@ export class PlayerCore {
 
   notedStations() {
     return Object.values(this.state.notes)
-      .filter((n) => n?.url)
+      .filter((n) => n?.url && !this.state.hidden.includes(n.id) && !this.state.hidden.includes(n.url))
       .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
       .map((n) => ({
         id: n.id,
@@ -311,48 +308,42 @@ export class PlayerCore {
     return this.setPlaylist(tracks);
   }
 
-  async playNoise(id) {
-    const preset = NOISE_PRESETS.find((p) => p.id === id);
-    if (!preset) return;
-    if (this.state.noiseId === id && this.state.status === "playing") {
-      this.stop();
-      return;
-    }
-    this.state.noiseId = id;
-    this.state.nowPlaying = preset.title;
-    this.state.error = "";
-    this.state.live = true;
-    this.state.duration = 0;
-    this.state.currentTime = 0;
-    this._loadedUrl = `noise:${id}`;
-    await this.engine.playNoise(id);
-    this.applyAudioSettings();
-    this.state.playing = true;
-    this.state.status = "playing";
-    this.broadcast();
+  setSongTitle(title) {
+    const next = String(title || "").trim();
+    if (next === this.state.songTitle) return;
+    this.state.songTitle = next;
+    this.broadcast("meta");
+  }
+
+  watchMeta(url) {
+    this.state.songTitle = "";
+    this.icy.watch(url, (title) => this.setSongTitle(title));
   }
 
   async playIndex(i, { autoplay = true, autoSkip = false } = {}) {
     if (!this.state.playlist.length) return;
     if (!autoSkip) this._skips = 0;
-    this.state.noiseId = null;
     this.state.index = ((i % this.state.playlist.length) + this.state.playlist.length) % this.state.playlist.length;
     this.state.cursor = this.state.index;
     const track = this.current();
     this.state.nowPlaying = track.title;
+    this.state.songTitle = "";
     this.state.error = "";
     let url = track.url;
     if (track.file instanceof Blob) {
       if (track._blobUrl) URL.revokeObjectURL(track._blobUrl);
       track._blobUrl = URL.createObjectURL(track.file);
       url = track._blobUrl;
+      this.icy.stop();
     } else {
       const resolved = await resolveClick(track.id);
       if (resolved) url = resolved;
       url = await unwrapStreamUrl(url);
+      this._streamUrl = url;
+      this.watchMeta(url);
     }
     await this.engine.load(url);
-    this.applyAudioSettings();
+    this.applyVolume();
     this._loadedUrl = url;
     if (autoplay) {
       try {
@@ -376,21 +367,10 @@ export class PlayerCore {
       this.broadcast();
       return;
     }
-    if (this.state.noiseId) {
-      try {
-        await this.engine.playNoise(this.state.noiseId);
-        this.state.playing = true;
-        this.state.status = "playing";
-      } catch (err) {
-        this.state.error = err.message || "play failed";
-        this.state.status = "error";
-      }
-      this.broadcast();
-      return;
-    }
     if (this._loadedUrl) {
       try {
         await this.engine.play();
+        if (this._streamUrl) this.watchMeta(this._streamUrl);
       } catch (err) {
         this.state.error = err.message || "play failed";
         this.state.status = "error";
@@ -402,8 +382,9 @@ export class PlayerCore {
   }
 
   stop() {
+    this.icy.stop();
     this.engine.stop();
-    this.state.noiseId = null;
+    this.state.songTitle = "";
     this.state.playing = false;
     this.state.status = "stopped";
     this.broadcast();
@@ -428,33 +409,41 @@ export class PlayerCore {
     this.persist();
   }
 
-  setTone(partial) {
-    this.state.tone = {
-      bass: clampTone(partial.bass ?? this.state.tone.bass),
-      mid: clampTone(partial.mid ?? this.state.tone.mid),
-      treble: clampTone(partial.treble ?? this.state.tone.treble),
-    };
-    this.engine.setTone(this.state.tone);
-    this.broadcast();
-    this.persist();
-  }
-
   setPlaylist(tracks, { play = true } = {}) {
-    this.state.playlist = tracks;
+    this.state.playlist = this.visible(tracks);
     this.state.index = 0;
     this.state.cursor = 0;
     this.broadcast();
     this.persist();
-    if (play && tracks.length) return this.playIndex(0);
+    if (play && this.state.playlist.length) return this.playIndex(0);
   }
 
   appendTracks(tracks) {
     const seen = new Set(this.state.playlist.map(trackKey));
-    const extra = tracks.filter((t) => !seen.has(trackKey(t)));
+    const extra = this.visible(tracks).filter((t) => !seen.has(trackKey(t)));
     this.state.playlist = [...this.state.playlist, ...extra];
     this.broadcast();
     this.persist();
     return extra.length;
+  }
+
+  hideStation(i) {
+    if (i < 0 || i >= this.state.playlist.length) return;
+    const key = trackKey(this.state.playlist[i]);
+    if (key && !this.state.hidden.includes(key)) this.state.hidden = [...this.state.hidden, key];
+    this.removeAt(i);
+  }
+
+  unhideAll() {
+    this.state.hidden = [];
+    this.persist();
+    this.broadcast();
+    if (!this.state.playlist.length) return this.setPlaylist(featuredTracks());
+  }
+
+  unhideKey(key) {
+    this.state.hidden = this.state.hidden.filter((k) => k !== key);
+    this.persist();
   }
 
   removeAt(i) {
@@ -495,8 +484,9 @@ export class PlayerCore {
   }
 
   loadFavorites() {
-    if (!this.state.favorites.length) return;
-    return this.setPlaylist(this.state.favorites.map((t) => ({ ...t })));
+    const tracks = this.visible(this.state.favorites.map((t) => ({ ...t })));
+    if (!tracks.length) return;
+    return this.setPlaylist(tracks);
   }
 
   setTheme(name) {
@@ -508,10 +498,6 @@ export class PlayerCore {
   cycleTheme() {
     const i = THEME_NAMES.indexOf(this.state.theme);
     this.setTheme(THEME_NAMES[(i + 1) % THEME_NAMES.length]);
-  }
-
-  getAnalyser() {
-    return this.engine.getAnalyser();
   }
 
   statePatch(partial) {

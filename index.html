@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,39 +8,26 @@
     <link rel="stylesheet" href="css/player.css" />
     <style>
       body { overflow: auto; }
-      .page {
-        max-width: 720px;
-        margin: 0 auto;
-        padding: 28px 18px 64px;
-      }
-      h1 {
-        font-size: 28px;
-        letter-spacing: 0.02em;
-        color: var(--accent);
-        font-weight: 700;
-        margin: 0 0 8px;
-      }
-      .tag {
-        color: var(--muted);
-        margin: 0 0 22px;
-      }
+      .page { max-width: 680px; margin: 0 auto; padding: 24px 16px 56px; }
+      h1 { font-size: 26px; color: var(--accent); margin: 0 0 6px; }
+      .tag { color: var(--muted); margin: 0 0 18px; }
       a { color: var(--accent); }
       pre, code {
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         background: color-mix(in srgb, var(--accent) 10%, transparent);
       }
       pre {
-        padding: 12px 14px;
+        padding: 10px 12px;
         overflow: auto;
         border: 1px solid var(--line);
-        border-radius: 12px;
+        border-radius: 10px;
       }
       ol { color: var(--text); padding-left: 1.2em; }
-      li { margin: 8px 0; }
+      li { margin: 6px 0; }
       .cta {
         display: inline-block;
-        margin: 8px 8px 18px 0;
-        padding: 8px 14px;
+        margin: 6px 8px 14px 0;
+        padding: 7px 12px;
         border-radius: 999px;
         border: 1px solid var(--accent);
         color: var(--bg);
@@ -48,51 +35,34 @@
         text-decoration: none;
         font-weight: 650;
       }
-      .cta.ghost {
-        background: transparent;
-        color: var(--accent);
-      }
-      section { margin: 28px 0; }
-      h2 {
-        color: var(--accent);
-        font-size: 13px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-      }
+      .cta.ghost { background: transparent; color: var(--accent); }
+      section { margin: 24px 0; }
+      h2 { color: var(--accent); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
     </style>
   </head>
   <body>
     <div class="page">
       <h1>broamp</h1>
-      <p class="tag">メモ付きのベッドサイド・ラジオ。スリープとホワイトノイズ付き。</p>
-      <a class="cta" href="player.html">プレイヤーを開く</a>
-      <a class="cta ghost" href="#install">拡張の入れ方</a>
+      <p class="tag">Compact bedside radio. Notes, sleep timer, live titles when the stream sends them.</p>
+      <a class="cta" href="player.html">Open player</a>
+      <a class="cta ghost" href="#install">Install extension</a>
 
       <section id="install">
         <h2>Install</h2>
         <ol>
-          <li>Chrome で <code>chrome://extensions</code> を開く</li>
-          <li>右上の「デベロッパーモード」をオン</li>
-          <li>「パッケージ化されていない拡張機能を読み込む」</li>
-          <li>このリポジトリのフォルダを選択する</li>
-          <li>ツールバーのアイコンをクリックして小さなプレイヤーウィンドウを開く</li>
+          <li>Open <code>chrome://extensions</code></li>
+          <li>Turn on Developer mode</li>
+          <li>Load unpacked and pick this folder</li>
+          <li>Click the toolbar icon for the compact window</li>
         </ol>
-        <p class="tag">再生はオフスクリーンで続くので、ウィンドウを閉じても止まりません。各局にメモを残せます。スリープは残り約 15 秒でフェードし、英語の声で The time is up. と知らせます。</p>
-      </section>
-
-      <section>
-        <h2>Features</h2>
-        <pre>station notes · Radio Browser · country browse
-sleep timer (15s fade + voice cue) · white noise (low / mid / high)
-bass / mid / treble · favorites · local files · stream URLs</pre>
+        <p class="tag">Playback continues offscreen. Tap <b>x</b> to hide a station. Sleep fades in the last 15 seconds, then says “The time is up.”</p>
       </section>
 
       <section>
         <h2>Keys</h2>
-        <pre>Space  play/pause     m  station note     S  sleep
-Enter  play cursor    M  noted stations   w  white noise
-R      radio search   N  by country       f  favorite
-?      shortcuts</pre>
+        <pre>Space  play/pause     m  note           S  sleep
+Enter  play cursor    x  hide station   R  tune
+?      shortcuts      N  country        f  favorite</pre>
       </section>
     </div>
   </body>
