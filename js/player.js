@@ -1,6 +1,5 @@
 import { PlayerCore, isExtension, defaultState, SLEEP_PRESETS, FADE_MS, trackKey } from "./core.js";
 import { applyTheme, THEME_NAMES, THEMES } from "./themes.js";
-import { Visualizer } from "./visualizer.js";
 import { searchStations, topStations, stationsByCountry, featuredTracks, loadFromUrl, REGIONS } from "./radio.js";
 
 class ExtensionBridge {
@@ -84,6 +83,8 @@ function closeOverlay() {
 
 function openOverlay(next) {
   overlay = next;
+  overlay._shell = null;
+  overlay._bound = false;
   overlayEl.classList.add("open");
   renderOverlay();
   const field = overlayEl.querySelector("input, textarea");
@@ -116,7 +117,7 @@ function noteText(track) {
 
 function renderOverlay() {
   if (!overlay) return;
-  const { kind, title, hint, items = [], cursor = 0, query = "", loading, error, body } = overlay;
+  const { kind, title, hint, query = "", body } = overlay;
   if (kind === "help") {
     overlayEl.innerHTML = `<h2>Keys</h2>
       <div class="keys">
@@ -167,9 +168,17 @@ function renderOverlay() {
   }
   overlayEl.innerHTML = `<h2>${escapeHtml(title || kind.toUpperCase())}</h2>
     <div class="hint">${escapeHtml(hint || "↑↓ move · Enter select · Esc close")}</div>
-    ${kind === "radio" ? `<input type="search" placeholder="Search…" value="${escapeAttr(query)}" />` : ""}
+    ${kind === "radio" ? `<input id="overlay-search" type="search" placeholder="Search…" value="${escapeAttr(query)}" />` : ""}
     <div class="results" id="overlay-results"></div>`;
+  bindOverlayInput();
+  renderOverlayResults();
+}
+
+function renderOverlayResults() {
+  if (!overlay) return;
   const box = overlayEl.querySelector("#overlay-results");
+  if (!box) return;
+  const { items = [], cursor = 0, loading, error } = overlay;
   if (loading) box.innerHTML = `<div class="empty">Loading…</div>`;
   else if (error) box.innerHTML = `<div class="empty err">ERR: ${escapeHtml(error)}</div>`;
   else if (!items.length) box.innerHTML = `<div class="empty">Nothing here.</div>`;
@@ -189,18 +198,24 @@ function renderOverlay() {
     });
     box.querySelector(".item.on")?.scrollIntoView({ block: "nearest" });
   }
-  bindOverlayInput();
 }
 
 function bindOverlayInput() {
-  const input = overlayEl.querySelector("input");
+  const input = overlayEl.querySelector("#overlay-search") || overlayEl.querySelector("input[type='text']");
   if (!input || overlay._bound) return;
   overlay._bound = true;
   input.addEventListener("input", () => {
     overlay.query = input.value;
-    overlay._bound = false;
-    if (overlay.onQuery) overlay.onQuery(overlay.query);
-    else renderOverlay();
+    if (!overlay.onQuery) {
+      renderOverlayResults();
+      return;
+    }
+    clearTimeout(overlay._searchTimer);
+    if (!overlay.items?.length) {
+      overlay.loading = true;
+      renderOverlayResults();
+    }
+    overlay._searchTimer = setTimeout(() => overlay.onQuery(overlay.query), 280);
   });
 }
 
@@ -235,8 +250,6 @@ const client = isExtension() ? new ExtensionBridge() : wrapLocal(localCore);
 if (!isExtension()) localCore.hydrate();
 
 applyTheme(client.state.theme);
-const vis = new Visualizer(document.getElementById("viz"));
-vis.start(() => client.state.status === "playing");
 
 client.subscribe((state, kind) => {
   applyTheme(state.theme);
@@ -273,23 +286,19 @@ function renderChrome(state) {
   document.getElementById("btn-play").textContent = state.status === "playing" ? "❚❚" : "▶";
   const vol = document.getElementById("vol-slider");
   if (document.activeElement !== vol) vol.value = String(state.volume ?? 80);
-  renderSleep(state);
+  updateSleepClock(state);
 }
 
 function render(state) {
   renderChrome(state);
+  renderSleepChips(state);
   renderThemes(state);
   renderList(state);
 }
 
-function renderSleep(state) {
-  const el = document.getElementById("sleep-line");
+function updateSleepClock(state) {
   const remaining = state.sleepEndsAt ? state.sleepRemainingMs || Math.max(0, state.sleepEndsAt - Date.now()) : 0;
   const fading = Boolean(state.sleepEndsAt) && remaining <= FADE_MS;
-  el.innerHTML = SLEEP_PRESETS.map((mins) => {
-    const on = state.sleepMinutes === mins ? "on" : "";
-    return `<button type="button" class="chip ${on}" data-sleep="${mins}">${mins}</button>`;
-  }).join("");
   const label = document.getElementById("sleep-label");
   const hint = document.getElementById("sleep-hint");
   if (label) {
@@ -306,6 +315,17 @@ function renderSleep(state) {
       else hint.innerHTML = `<button type="button" class="hint-cancel" data-sleep="off">Cancel</button>`;
     }
   }
+}
+
+function renderSleepChips(state) {
+  const el = document.getElementById("sleep-line");
+  const sig = String(state.sleepMinutes ?? "off");
+  if (el.dataset.sig === sig && el.childElementCount) return;
+  el.dataset.sig = sig;
+  el.innerHTML = SLEEP_PRESETS.map((mins) => {
+    const on = state.sleepMinutes === mins ? "on" : "";
+    return `<button type="button" class="chip ${on}" data-sleep="${mins}">${mins}</button>`;
+  }).join("");
 }
 
 function renderThemes(state) {
@@ -404,12 +424,14 @@ function openRadio(seed = "") {
     cursor: 0,
     loading: true,
     async onQuery(q) {
-      overlay.loading = true;
-      overlay._bound = false;
-      renderOverlay();
+      const seq = (overlay._seq = (overlay._seq || 0) + 1);
+      if (!overlay.items?.length) {
+        overlay.loading = true;
+        renderOverlayResults();
+      }
       try {
         const tracks = q.trim() ? await searchStations({ name: q.trim(), limit: 50 }) : await topStations(40);
-        if (overlay?.kind !== "radio") return;
+        if (overlay?.kind !== "radio" || seq !== overlay._seq) return;
         overlay.loading = false;
         overlay.error = "";
         overlay.items = tracks.map((t) => ({
@@ -418,13 +440,12 @@ function openRadio(seed = "") {
           track: t,
         }));
         overlay.cursor = 0;
-        overlay._bound = false;
-        renderOverlay();
+        renderOverlayResults();
       } catch (err) {
+        if (overlay?.kind !== "radio" || seq !== overlay._seq) return;
         overlay.loading = false;
         overlay.error = err.message;
-        overlay._bound = false;
-        renderOverlay();
+        renderOverlayResults();
       }
     },
     async onPick(item) {
@@ -444,8 +465,7 @@ function openCountries() {
     cursor: 0,
     async onPick(item) {
       overlay.loading = true;
-      overlay._bound = false;
-      renderOverlay();
+      renderOverlayResults();
       try {
         const tracks = await stationsByCountry(item.code, 60);
         closeOverlay();
@@ -453,14 +473,13 @@ function openCountries() {
           toast("No stations");
           return;
         }
-        client.command("unlock");
-        await client.command("setPlaylist", tracks);
-        toast(`${item.code} · ${tracks.length}`);
+        const keep = ["playing", "buffering", "paused"].includes(client.state.status);
+        await client.command("setPlaylist", tracks, { play: !keep });
+        toast(keep ? `${item.code} · still playing` : `${item.code} · ${tracks.length}`);
       } catch (err) {
         overlay.loading = false;
         overlay.error = err.message;
-        overlay._bound = false;
-        renderOverlay();
+        renderOverlayResults();
       }
     },
   });
@@ -598,14 +617,12 @@ document.addEventListener("keydown", async (e) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
       overlay.cursor = Math.min((overlay.items?.length || 1) - 1, (overlay.cursor || 0) + 1);
-      overlay._bound = false;
-      renderOverlay();
+      renderOverlayResults();
     }
     if (e.key === "ArrowUp") {
       e.preventDefault();
       overlay.cursor = Math.max(0, (overlay.cursor || 0) - 1);
-      overlay._bound = false;
-      renderOverlay();
+      renderOverlayResults();
     }
     if (e.key === "Enter") {
       e.preventDefault();

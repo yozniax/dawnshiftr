@@ -26,7 +26,6 @@ Audio keeps playing in an offscreen document if you close the window.
 - Hide a station with `x` (Show hidden restores them)
 - Sleep timer: last ~15 seconds fade, then a voice says “The time is up.”
 - Live song title when the stream sends ICY metadata
-- Radio-wave visual (not a music EQ)
 
 ## Keys
 

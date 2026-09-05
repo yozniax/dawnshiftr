@@ -410,12 +410,28 @@ export class PlayerCore {
   }
 
   setPlaylist(tracks, { play = true } = {}) {
-    this.state.playlist = this.visible(tracks);
+    const incoming = this.visible(tracks);
+    const current = this.current();
+    const keep =
+      !play &&
+      current &&
+      (this.state.status === "playing" || this.state.status === "buffering" || this.state.status === "paused");
+    if (keep) {
+      const key = trackKey(current);
+      const rest = incoming.filter((t) => trackKey(t) !== key);
+      this.state.playlist = [current, ...rest];
+      this.state.index = 0;
+      this.state.cursor = 0;
+      this.broadcast();
+      this.persist();
+      return;
+    }
+    this.state.playlist = incoming;
     this.state.index = 0;
     this.state.cursor = 0;
     this.broadcast();
     this.persist();
-    if (play && this.state.playlist.length) return this.playIndex(0);
+    if (play && incoming.length) return this.playIndex(0);
   }
 
   appendTracks(tracks) {
