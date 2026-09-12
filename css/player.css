@@ -613,3 +613,5 @@ a.help-btn {
 
 body.compact #app { padding: 8px; gap: 6px; }
 body.windowed { min-width: 520px; }
+body.windowed .brand { display: none; }
+body.windowed .top { justify-content: flex-end; }
