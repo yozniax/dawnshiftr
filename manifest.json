@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "DAWNSHIFTr",
   "short_name": "DAWNSHIFTr",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Bedside internet radio. Station notes, sleep timer, live titles.",
   "homepage_url": "https://github.com/yozniax/dawnshiftr",
   "minimum_chrome_version": "116",
