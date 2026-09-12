@@ -3,6 +3,42 @@ import { parseYouTubeUrl } from "./js/youtube.js";
 const OFFSCREEN_URL = "offscreen.html";
 const PLAYER_URL = "player.html?surface=window";
 
+async function setupCorsRules() {
+  if (!chrome.declarativeNetRequest?.updateDynamicRules) return;
+  const extensionId = chrome.runtime.id;
+  const RULE_ID = 1;
+  const rules = [
+    {
+      id: RULE_ID,
+      priority: 1,
+      action: {
+        type: "modifyHeaders",
+        responseHeaders: [
+          { header: "Access-Control-Allow-Origin", operation: "set", value: "*" },
+          { header: "Access-Control-Allow-Headers", operation: "set", value: "*" },
+          { header: "Timing-Allow-Origin", operation: "set", value: "*" },
+        ],
+      },
+      condition: {
+        urlFilter: "*",
+        initiatorDomains: [extensionId],
+        resourceTypes: ["media", "xmlhttprequest", "other"],
+      },
+    },
+  ];
+
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [RULE_ID],
+      addRules: rules,
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+void setupCorsRules();
+
 let offscreenPort = null;
 const uiPorts = new Set();
 const pending = [];
@@ -195,12 +231,14 @@ function setupContextMenus() {
 }
 
 chrome.runtime.onInstalled.addListener((details) => {
+  void setupCorsRules();
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
   setupContextMenus();
   if (details.reason === "install") openPlayerWindow();
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  void setupCorsRules();
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
 });
 

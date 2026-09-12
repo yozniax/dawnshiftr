@@ -57,15 +57,6 @@
     "extension_pages": "script-src 'self'; object-src 'self'; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com https://music.youtube.com"
   },
   "host_permissions": ["<all_urls>"],
-  "declarative_net_request": {
-    "rule_resources": [
-      {
-        "id": "cors",
-        "enabled": true,
-        "path": "rules.json"
-      }
-    ]
-  },
   "commands": {
     "play-pause": {
       "suggested_key": { "default": "MediaPlayPause" },
