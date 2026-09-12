@@ -41,15 +41,6 @@
     "extension_pages": "script-src 'self'; object-src 'self'"
   },
   "host_permissions": ["<all_urls>"],
-  "declarative_net_request": {
-    "rule_resources": [
-      {
-        "id": "cors",
-        "enabled": true,
-        "path": "rules.json"
-      }
-    ]
-  },
   "commands": {
     "play-pause": {
       "description": "Play / pause"

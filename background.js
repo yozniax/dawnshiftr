@@ -3,6 +3,54 @@ import { handleVaultMessage } from "./js/storage.js";
 const OFFSCREEN_URL = "offscreen.html";
 const PLAYER_URL = "player.html?surface=window";
 
+async function setupCorsRules() {
+  if (!chrome.declarativeNetRequest?.updateDynamicRules) return;
+  const extensionId = chrome.runtime.id;
+  const RULE_ID = 1;
+  const rules = [
+    {
+      id: RULE_ID,
+      priority: 1,
+      action: {
+        type: "modifyHeaders",
+        responseHeaders: [
+          { header: "Access-Control-Allow-Origin", operation: "set", value: "*" },
+          { header: "Access-Control-Allow-Headers", operation: "set", value: "*" },
+          { header: "Timing-Allow-Origin", operation: "set", value: "*" },
+        ],
+      },
+      condition: {
+        urlFilter: "*",
+        initiatorDomains: [extensionId],
+        resourceTypes: ["media", "xmlhttprequest", "other"],
+      },
+    },
+    {
+      id: 2,
+      priority: 1,
+      action: {
+        type: "modifyHeaders",
+        requestHeaders: [{ header: "User-Agent", operation: "set", value: "DAWNSHIFTR/1.0" }],
+      },
+      condition: {
+        urlFilter: "||radio-browser.info",
+        resourceTypes: ["xmlhttprequest", "other"],
+      },
+    },
+  ];
+
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [RULE_ID, 2],
+      addRules: rules,
+    });
+  } catch {
+    /* ignore */
+  }
+}
+
+void setupCorsRules();
+
 let offscreenPort = null;
 const uiPorts = new Set();
 const pending = [];
@@ -106,7 +154,12 @@ function setupContextMenus() {
 }
 
 chrome.runtime.onInstalled.addListener(() => {
+  void setupCorsRules();
   setupContextMenus();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  void setupCorsRules();
 });
 
 chrome.contextMenus.onClicked.addListener((info) => {

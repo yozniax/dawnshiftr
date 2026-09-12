@@ -60,13 +60,8 @@ test("applyAmbientAudioSession marks the session as ambient and not controlling"
   assert.ok(cleared.some(([action, handler]) => action === "pause" && handler == null));
 });
 
-test("CORS rewrite skips YouTube media hosts", () => {
-  const rules = JSON.parse(readFileSync(new URL("../rules.json", import.meta.url), "utf8"));
-  const cors = rules.find((rule) => rule.id === 1);
-  const request = cors?.condition?.excludedRequestDomains || [];
-  const initiator = cors?.condition?.excludedInitiatorDomains || [];
-  for (const host of ["youtube.com", "googlevideo.com", "youtube-nocookie.com"]) {
-    assert.ok(request.includes(host), `request ${host}`);
-    assert.ok(initiator.includes(host), `initiator ${host}`);
-  }
+test("CORS rewrite is scoped to the extension initiator", () => {
+  const src = readFileSync(new URL("../background.js", import.meta.url), "utf8");
+  assert.match(src, /initiatorDomains:\s*\[extensionId\]/);
+  assert.match(src, /radio-browser\.info/);
 });
