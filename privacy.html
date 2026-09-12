@@ -20,7 +20,7 @@
   <body>
     <div class="page">
       <h1><span class="dawn">DAWN</span>SHIFT<span class="tail">R</span> privacy</h1>
-      <p class="muted">Last updated 5 September 2026. DoYoBe / DAWNSHIFTr.</p>
+      <p class="muted">Last updated 12 September 2026. DoYoBe / DAWNSHIFTr.</p>
 
       <p>
         DAWNSHIFTr can send anonymous usage stats so we can see which stations people favorite,
@@ -37,6 +37,15 @@
         <li>Timezone and browser language.</li>
         <li>Country and city, derived on the server from the network address of the request. That address is used only for this lookup and is not stored.</li>
       </ul>
+
+      <h2>Reinstall backup</h2>
+      <p>
+        Chrome deletes an extension’s own storage when you Remove it. To keep favorites, notes, hidden
+        stations, history, and volume across a reinstall, DAWNSHIFTr also writes a restore snapshot into
+        this Chrome profile as cookies on <code>www.doyo.be</code> path <code>/dawnshiftr-backup</code>.
+        That path is not used by the public site, and the snapshot is not sent to our servers.
+        Clearing cookies or site data for doyo.be, or using a different Chrome profile, drops the backup.
+      </p>
 
       <h2>What we do not collect</h2>
       <ul>

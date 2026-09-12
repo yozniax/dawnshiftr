@@ -1,4 +1,4 @@
-import { parseYouTubeUrl } from "./js/youtube.js";
+import { handleVaultMessage } from "./js/storage.js";
 
 const OFFSCREEN_URL = "offscreen.html";
 const PLAYER_URL = "player.html?surface=window";
@@ -57,92 +57,16 @@ async function openPlayerWindow() {
   playerWindowId = win?.id ?? null;
 }
 
-function youtubeFromTab(tab) {
-  const parsed = parseYouTubeUrl(tab?.url || "");
-  if (!parsed) return null;
-  return { ...parsed, title: tab.title || "YouTube", url: tab.url, tabId: tab.id };
-}
-
-function playMediaInPage() {
-  const player = document.getElementById("movie_player") || document.querySelector(".html5-video-player");
-  if (player && typeof player.playVideo === "function") {
-    try {
-      player.unMute();
-    } catch {
-      /* ignore */
-    }
-    try {
-      player.playVideo();
-    } catch {
-      /* ignore */
-    }
-    return { ok: true, via: "player" };
-  }
-  const v =
-    document.querySelector("video.html5-main-video") ||
-    document.querySelector("video") ||
-    document.querySelector("audio");
-  if (!v) return { ok: false, reason: "no-media" };
-  v.muted = false;
-  const result = v.play();
-  if (result && typeof result.then === "function") {
-    return result.then(() => ({ ok: true, via: "element" })).catch((err) => ({ ok: false, reason: String(err) }));
-  }
-  return { ok: true, via: "element-sync" };
-}
-
-function kickTabPlayback(tabId) {
-  if (tabId == null || !chrome.scripting?.executeScript) return;
+async function openPlayerPopup() {
   try {
-    const unmute = chrome.tabs.update(tabId, { muted: false });
-    if (unmute && typeof unmute.catch === "function") void unmute.catch(() => {});
+    if (chrome.action?.openPopup) {
+      await chrome.action.openPopup();
+      return;
+    }
   } catch {
-    /* ignore */
+    /* no toolbar host window, or popup already open */
   }
-  void chrome.scripting
-    .executeScript({
-      target: { tabId },
-      world: "MAIN",
-      func: playMediaInPage,
-    })
-    .catch(() => {});
-  void chrome.scripting
-    .executeScript({
-      target: { tabId },
-      files: ["js/yt-tab.js"],
-    })
-    .catch(() => {});
-}
-
-async function findYouTubeTab(clickedTab) {
-  const direct = youtubeFromTab(clickedTab);
-  if (direct) return direct;
-  const windows = await chrome.tabs.query({ currentWindow: true });
-  for (const tab of windows) {
-    const hit = youtubeFromTab(tab);
-    if (hit) return hit;
-  }
-  const all = await chrome.tabs.query({});
-  for (const tab of all) {
-    const hit = youtubeFromTab(tab);
-    if (hit) return hit;
-  }
-  return null;
-}
-
-async function playYouTubeTab(tab) {
-  const direct = youtubeFromTab(tab);
-  if (direct) kickTabPlayback(direct.tabId);
-  const yt = direct || (await findYouTubeTab(tab));
-  if (!yt) return false;
-  if (!direct) kickTabPlayback(yt.tabId);
-  await ensureOffscreen();
-  sendToOffscreen({
-    type: "cmd",
-    name: "playYouTube",
-    args: [{ ...yt, alreadyPlaying: true }],
-  });
-  return true;
+  await openPlayerWindow();
 }
 
 chrome.runtime.onConnect.addListener((port) => {
@@ -170,11 +94,6 @@ chrome.runtime.onConnect.addListener((port) => {
   }
 });
 
-chrome.action.onClicked.addListener(async (tab) => {
-  await playYouTubeTab(tab);
-  openPlayerWindow();
-});
-
 chrome.windows.onRemoved.addListener((id) => {
   if (id === playerWindowId) playerWindowId = null;
 });
@@ -183,48 +102,26 @@ function setupContextMenus() {
   chrome.contextMenus.removeAll(() => {
     chrome.contextMenus.create({ id: "open-window", title: "Open DAWNSHIFTr window", contexts: ["action"] });
     chrome.contextMenus.create({ id: "open-tab", title: "Open DAWNSHIFTr in tab", contexts: ["action"] });
-    chrome.contextMenus.create({ id: "open-side", title: "Open side panel", contexts: ["action"] });
-    chrome.contextMenus.create({ id: "play-youtube", title: "Play YouTube tab in DAWNSHIFTr", contexts: ["action"] });
-    chrome.contextMenus.create({
-      id: "play-youtube-page",
-      title: "Play this tab in DAWNSHIFTr",
-      contexts: ["page"],
-      documentUrlPatterns: ["*://*.youtube.com/*", "*://youtu.be/*", "*://*.youtube-nocookie.com/*", "*://music.youtube.com/*"],
-    });
   });
 }
 
-chrome.runtime.onInstalled.addListener((details) => {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
+chrome.runtime.onInstalled.addListener(() => {
   setupContextMenus();
-  if (details.reason === "install") openPlayerWindow();
 });
 
-chrome.runtime.onStartup.addListener(() => {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
-});
-
-chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+chrome.contextMenus.onClicked.addListener((info) => {
   if (info.menuItemId === "open-window") {
     openPlayerWindow();
   }
   if (info.menuItemId === "open-tab") {
     chrome.tabs.create({ url: chrome.runtime.getURL("player.html") });
   }
-  if (info.menuItemId === "open-side") {
-    const windowId = tab?.windowId ?? (await chrome.windows.getCurrent()).id;
-    await chrome.sidePanel.open({ windowId });
-  }
-  if (info.menuItemId === "play-youtube" || info.menuItemId === "play-youtube-page") {
-    await playYouTubeTab(tab);
-    openPlayerWindow();
-  }
 });
 
 chrome.commands.onCommand.addListener(async (command) => {
   await ensureOffscreen();
   if (command === "open-player") {
-    await openPlayerWindow();
+    await openPlayerPopup();
     return;
   }
   const map = {
@@ -243,3 +140,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 ensureOffscreen().catch(() => {});
+
+chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  const work = handleVaultMessage(msg);
+  if (!work) return;
+  work.then((data) => sendResponse(data)).catch((err) => sendResponse({ error: String(err) }));
+  return true;
+});

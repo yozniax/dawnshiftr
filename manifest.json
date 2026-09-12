@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "DAWNSHIFTr",
   "short_name": "DAWNSHIFTr",
-  "version": "1.0.0",
+  "version": "1.0.7",
   "description": "Bedside internet radio. Station notes, sleep timer, live titles.",
   "homepage_url": "https://github.com/yozniax/dawnshiftr",
   "minimum_chrome_version": "116",
@@ -13,7 +13,8 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "DAWNSHIFTr — play the YouTube tab",
+    "default_title": "DAWNSHIFTr",
+    "default_popup": "player.html?surface=popup",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png",
@@ -21,40 +22,23 @@
       "128": "icons/icon128.png"
     }
   },
-  "side_panel": {
-    "default_path": "player.html"
-  },
   "background": {
     "service_worker": "background.js",
     "type": "module"
   },
   "offline_enabled": false,
   "permissions": [
-    "sidePanel",
     "offscreen",
     "storage",
+    "cookies",
     "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
     "contextMenus",
     "commands",
-    "alarms",
-    "tabs",
-    "activeTab",
-    "scripting"
-  ],
-  "content_scripts": [
-    {
-      "matches": [
-        "*://www.youtube.com/*",
-        "*://m.youtube.com/*",
-        "*://music.youtube.com/*",
-        "*://www.youtube-nocookie.com/*"
-      ],
-      "js": ["js/yt-tab.js"],
-      "run_at": "document_idle"
-    }
+    "alarms"
   ],
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://youtube.com https://music.youtube.com"
+    "extension_pages": "script-src 'self'; object-src 'self'"
   },
   "host_permissions": ["<all_urls>"],
   "declarative_net_request": {
@@ -68,15 +52,12 @@
   },
   "commands": {
     "play-pause": {
-      "suggested_key": { "default": "MediaPlayPause" },
       "description": "Play / pause"
     },
     "next-track": {
-      "suggested_key": { "default": "MediaNextTrack" },
       "description": "Next track"
     },
     "prev-track": {
-      "suggested_key": { "default": "MediaPrevTrack" },
       "description": "Previous track"
     },
     "open-player": {

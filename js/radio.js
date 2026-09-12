@@ -104,12 +104,47 @@ async function api(path) {
   throw lastError || new Error("Radio Browser unreachable");
 }
 
+const DIRECTORY_CODECS = new Set(["MP3", "AAC", "AAC+", "OGG", "OPUS", "VORBIS", "FLAC", "OGA"]);
+
+const BLOCKED_HOST_RE = /youtube\.com|youtu\.be|googlevideo\.com|radiko\.|ihrhls\.com|tver\.jp/i;
+
+const ICECAST_HINT_RE = /icecast|shoutcast|laut\.fm|radioca\.st|airtime\.pro|somafm\.com|:8000|:8001|:8002|:8443/i;
+
+function hasDirectoryAudioPath(url) {
+  return /\.(mp3|aac|ogg|opus|oga|flac|m4a)(?:$|[?#])/i.test(String(url || "").split("?")[0]);
+}
+
+/** Japanese terrestrial / radiko relays. Community FM and internet-only streams stay. */
+const JP_TERRESTRIAL_RE =
+  /NHK-?FM|NHKラジオ第[12]|ラジオ第[12]放送|\bradiko\b|TBSラジオ|文化放送|ニッポン放送|RFラジオ日本|TOKYO\s*FM|\bJ-WAVE\b|\bJWAVE\b|FM802|InterFM|\bbayfm\b|NACK5|FMヨコハマ/i;
+
+function streamUrl(station) {
+  return String(station?.url_resolved || station?.url || "");
+}
+
+function isJpTerrestrialRelay(station) {
+  const name = String(station?.name || station?.title || "");
+  const url = streamUrl(station).toLowerCase();
+  if (/nhkworld\.jp/.test(url)) return false;
+  if (/radiko|nhkfm|nhk-fm/.test(url)) return true;
+  return JP_TERRESTRIAL_RE.test(name);
+}
+
+/** Icecast/SHOUTcast-style HTTP audio from Radio Browser. Not HLS or JP terrestrial relays. */
 export function isPlayableStation(station) {
-  if (Number(station.hls) === 1) return false;
-  const url = String(station.url_resolved || station.url || "").toLowerCase();
+  if (Number(station?.hls) === 1) return false;
+  const url = streamUrl(station);
   if (!url) return false;
-  if (url.includes(".m3u8") || url.includes("ihrhls.com") || url.includes("/hls/")) return false;
-  return true;
+  const lower = url.toLowerCase();
+  if (!/^https?:\/\//.test(lower)) return false;
+  if (/^(rtmp|rtsp|mms):/i.test(url)) return false;
+  if (lower.includes(".m3u8") || lower.includes(".mpd") || lower.includes("/hls/")) return false;
+  if (BLOCKED_HOST_RE.test(lower)) return false;
+  if (isJpTerrestrialRelay(station)) return false;
+  const codec = String(station?.codec || "").toUpperCase().trim();
+  if (DIRECTORY_CODECS.has(codec)) return true;
+  if (!codec || codec === "UNKNOWN") return ICECAST_HINT_RE.test(lower) || hasDirectoryAudioPath(url);
+  return false;
 }
 
 function toTrack(station, extra = {}) {
@@ -133,16 +168,18 @@ export function featuredTracks() {
 }
 
 export async function searchStations({ name = "", country = "", limit = 40 } = {}) {
+  const want = Math.max(1, Math.round(Number(limit) || 40));
+  const fetchN = Math.min(400, Math.max(want * 2, 80));
   const params = new URLSearchParams({
     hidebroken: "true",
     order: "clickcount",
     reverse: "true",
-    limit: String(limit),
+    limit: String(fetchN),
   });
   if (name) params.set("name", name);
   if (country) params.set("countrycode", country);
   const rows = await api(`/json/stations/search?${params}`);
-  return (rows || []).filter(isPlayableStation).map((s) => toTrack(s));
+  return (rows || []).filter(isPlayableStation).map((s) => toTrack(s)).slice(0, want);
 }
 
 export const POPULAR_LIMIT = 50;
@@ -195,7 +232,7 @@ export const REGIONS = [
 ];
 
 export async function resolveClick(uuid) {
-  if (!uuid || String(uuid).startsWith("featured-")) return null;
+  if (!uuid || String(uuid).startsWith("featured-") || String(uuid).startsWith("jcba:")) return null;
   try {
     const rows = await api(`/json/url/${uuid}`);
     const row = Array.isArray(rows) ? rows[0] : rows;

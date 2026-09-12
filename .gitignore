@@ -6,3 +6,4 @@ data/
 dist/
 *.crx
 *.pem
+_metadata/

@@ -1,6 +1,6 @@
 {
   "name": "dawnshiftr",
-  "version": "1.0.0",
+  "version": "1.0.7",
   "private": true,
   "type": "module",
   "description": "DAWNSHIFTr — compact bedside radio with notes and a sleep timer",

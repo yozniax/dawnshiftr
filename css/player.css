@@ -423,10 +423,13 @@ a.help-btn {
   letter-spacing: 0.04em;
   line-height: 1.2;
   font-weight: 650;
+  text-decoration: none;
 }
 
+a.mini { display: inline-block; }
 .mini:hover { color: var(--accent); }
 .mini.on { color: var(--accent); }
+.mini.off { opacity: 0.35; pointer-events: none; cursor: default; }
 .mini.hide:hover { color: var(--danger); }
 
 .empty {
@@ -613,3 +616,14 @@ a.help-btn {
 
 body.compact #app { padding: 8px; gap: 6px; }
 body.windowed { min-width: 520px; }
+
+html:has(body.popup),
+body.popup {
+  width: 420px;
+  height: 580px;
+}
+
+body.popup #app {
+  height: 100%;
+  max-height: 100%;
+}

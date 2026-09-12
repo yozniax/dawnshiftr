@@ -1,9 +1,10 @@
 import { PlayerCore, isExtension, defaultState, SLEEP_PRESETS, trackKey, sleepChipLabel } from "./core.js";
 import { searchStations, stationsByCountry, popularStations, POPULAR_HEADING, POPULAR_LIMIT, REGIONS } from "./radio.js";
+import { doyobePicks, DOYOBE_PICKS_HEADING } from "./jcba.js";
 import { attachEqVis } from "./eq-vis.js";
 import { isEnabled, setEnabled } from "./telemetry.js";
 import { sleepClock, isPomodoro } from "./sleep.js";
-import { mergeTracks, trackHaystack as haystackOf, tracksForPane, scrollChildIntoContainer, stepCursor } from "./tracks.js";
+import { mergeTracks, trackHaystack as haystackOf, tracksForPane, scrollChildIntoContainer, stepCursor, stationSiteUrl } from "./tracks.js";
 
 class ExtensionBridge {
   constructor() {
@@ -12,7 +13,7 @@ class ExtensionBridge {
     this.port = chrome.runtime.connect({ name: "ui" });
     this.port.onMessage.addListener((msg) => {
       if (msg?.type === "analyser") {
-        analyserBins = msg.bins || null;
+        analyserBins = Array.isArray(msg.bins) ? msg.bins : null;
         return;
       }
       if (msg?.type === "state") {
@@ -89,6 +90,7 @@ let countryLoading = false;
 let countryError = "";
 let countryCode = "";
 let browseCursor = 0;
+let didFitWindow = false;
 
 function toast(text) {
   toastEl.textContent = text;
@@ -149,6 +151,7 @@ function renderOverlay() {
         <span>Space</span><span>Play / pause</span>
         <span>Enter</span><span>Play highlighted</span>
         <span>↑ ↓</span><span>Move cursor</span>
+        <span>U</span><span>Open station site</span>
         <span>F</span><span>Fav highlighted</span>
         <span>N</span><span>Note highlighted</span>
         <span>X / D</span><span>Delete highlighted</span>
@@ -160,7 +163,6 @@ function renderOverlay() {
         <span>Shift+C</span><span>Countries tab</span>
         <span>Esc</span><span>Fav / close</span>
       </div>
-      <div class="hint">Toolbar icon on a YouTube tab plays that tab. Sleep / pause control it from here.</div>
       <div class="hint stats-line">
         <button type="button" id="btn-stats">Usage stats: …</button>
         <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy</a>
@@ -207,6 +209,7 @@ function renderOverlay() {
 
 const surface = new URLSearchParams(location.search).get("surface") || "page";
 if (surface === "popup" || surface === "window") document.body.classList.add("compact");
+if (surface === "popup") document.body.classList.add("popup");
 if (surface === "window") document.body.classList.add("windowed");
 
 const localCore = isExtension() ? null : new PlayerCore();
@@ -258,7 +261,8 @@ function renderChrome(state) {
   title.textContent = track?.title || "PICK A STATION";
   title.classList.toggle("is-on", isOnAir(state));
   const song = document.getElementById("song-title");
-  song.textContent = String(state.songTitle || "").trim();
+  song.textContent =
+    state.status === "error" ? String(state.error || "playback failed") : String(state.songTitle || "").trim();
   document.getElementById("btn-play").textContent = state.status === "playing" ? "❚❚" : "▶";
   const vol = document.getElementById("vol-slider");
   if (document.activeElement !== vol) vol.value = String(state.volume ?? 80);
@@ -296,7 +300,6 @@ function renderSleepChips(state) {
   fitPlayerWindow();
 }
 
-let didFitWindow = false;
 function fitPlayerWindow() {
   if (didFitWindow || surface !== "window") return;
   if (typeof chrome === "undefined" || !chrome.windows?.getCurrent) return;
@@ -417,6 +420,7 @@ function localCatalog() {
   for (const t of client.state.playlist || []) add(t);
   for (const t of client.state.favorites || []) add(t);
   for (const t of client.state.history || []) add(t);
+  for (const t of doyobePicks()) add(t);
   for (const n of Object.values(client.state.notes || {})) {
     add({
       id: n.id,
@@ -439,12 +443,17 @@ function stationRow(t, i, { history = false } = {}) {
   const playing = isOnAir(client.state) && trackKey(t) === playingKey(client.state) ? "is-playing" : "";
   const cur = i === browseCursor ? "is-cursor" : "";
   const del = `<button type="button" class="mini hide" data-row-act="delete">DELETE</button>`;
+  const site = stationSiteUrl(t);
+  const url = site
+    ? `<a class="mini" href="${escapeAttr(site)}" target="_blank" rel="noopener noreferrer" data-row-act="url">URL</a>`
+    : `<span class="mini off">URL</span>`;
   return `<div class="track ${playing} ${cur}" data-i="${i}" data-key="${escapeAttr(trackKey(t))}">
     <div>
       <div class="name">${escapeHtml(t.title)}</div>
       <div class="memo ${memo ? "" : "none"}">${escapeHtml([t.country, memo || "No note"].filter(Boolean).join(" · "))}</div>
     </div>
     <div class="track-side">
+      ${url}
       <button type="button" class="mini ${fav ? "on" : ""}" data-row-act="fav">FAV</button>
       <button type="button" class="mini" data-row-act="note">NOTE</button>
       ${del}
@@ -509,6 +518,10 @@ function bindStationRows(tracks, { history = false } = {}) {
       const track = tracks[i];
       if (!track) return;
       const act = btn.dataset.rowAct;
+      if (act === "url") {
+        openStationSite(track);
+        return;
+      }
       if (act === "fav") client.command("toggleFavorite", track);
       else if (act === "note") openMemo(track);
       else if (act === "delete") {
@@ -564,26 +577,49 @@ function historyItems() {
   return (client.state.history || []).map((t) => t);
 }
 
+function curatedVisible() {
+  return doyobePicks().filter((t) => !isHiddenTrack(t));
+}
+
+function stationsListTracks() {
+  const q = stationsQuery.trim();
+  if (q) return stationsItems;
+  return mergeTracks(curatedVisible(), stationsItems);
+}
+
 function renderStations() {
   const q = stationsQuery.trim();
-  if (stationsLoading) {
+  const picks = q ? [] : curatedVisible();
+  if (stationsLoading && q) {
     listEl.dataset.sig = "stations-loading";
     listEl.innerHTML = `<div class="empty">LOADING…</div>`;
     return;
   }
-  if (stationsError) {
+  if (stationsError && q) {
     listEl.dataset.sig = "stations-err";
     listEl.innerHTML = `<div class="empty err">ERR: ${escapeHtml(stationsError)}</div>`;
     return;
   }
-  const tracks = stationsItems;
-  const sig = `stations\n${q}\n${tracks.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")}`;
-  if (!tracks.length) {
+  const rest = stationsItems;
+  const tracks = q ? rest : mergeTracks(picks, rest);
+  const sig = `stations\n${q}\n${stationsLoading ? "loading" : ""}\n${tracks.map((t) => `${trackKey(t)}\u0001${client.isFavorite(t) ? 1 : 0}\u0001${noteText(t)}`).join("\n")}`;
+  if (!tracks.length && !stationsLoading) {
     paintList("stations-empty", `<div class="empty">${q ? "NOTHING HERE." : "TYPE TO SEARCH ALL STATIONS."}</div>`);
     return;
   }
-  const heading = !q ? `<div class="list-heading">${POPULAR_HEADING}</div>` : "";
-  paintList(sig, heading + tracks.map((t, i) => stationRow(t, i)).join(""), () => bindStationRows(tracks));
+  let html = "";
+  if (picks.length) {
+    html += `<div class="list-heading">${DOYOBE_PICKS_HEADING}</div>`;
+    html += picks.map((t, i) => stationRow(t, i)).join("");
+  }
+  if (!q) html += `<div class="list-heading">${POPULAR_HEADING}</div>`;
+  if (!q && stationsLoading) html += `<div class="empty">LOADING…</div>`;
+  else if (!q && stationsError && !rest.length) html += `<div class="empty err">ERR: ${escapeHtml(stationsError)}</div>`;
+  else {
+    const restRows = tracks.slice(picks.length);
+    html += restRows.map((t, i) => stationRow(t, i + picks.length)).join("");
+  }
+  paintList(sig, html, () => bindStationRows(tracks));
 }
 
 async function searchStationsPane(q) {
@@ -748,7 +784,7 @@ function visibleTracks() {
     const q = historyQuery.trim().toLowerCase();
     return historyItems().filter((t) => !q || trackHaystack(t).includes(q));
   }
-  if (pane === "stations") return stationsItems;
+  if (pane === "stations") return stationsListTracks();
   if (pane === "countries" && countryStations) return countryStationList();
   return tracksForPane(pane, {});
 }
@@ -804,6 +840,25 @@ function favHighlight() {
 function noteHighlight() {
   const track = highlightedTrack();
   if (track) openMemo(track);
+}
+
+function openStationSite(track) {
+  const url = stationSiteUrl(track);
+  if (!url) {
+    toast("NO URL");
+    return;
+  }
+  if (typeof chrome !== "undefined" && chrome.tabs?.create) {
+    chrome.tabs.create({ url });
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function urlHighlight() {
+  const track = highlightedTrack();
+  if (!track) return;
+  openStationSite(track);
 }
 
 function deleteHighlight() {
@@ -1021,6 +1076,11 @@ document.addEventListener("keydown", async (e) => {
   }
   if (key === "ArrowLeft") {
     client.command("prev");
+    return;
+  }
+  if (e.code === "KeyU" && !e.shiftKey) {
+    e.preventDefault();
+    urlHighlight();
     return;
   }
   if (e.code === "KeyN" || e.code === "KeyM") {
