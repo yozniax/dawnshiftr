@@ -28,7 +28,7 @@ export class IcyWatcher {
 
   watch(url, onTitle) {
     this.stop();
-    if (!url || url.startsWith("blob:") || url.startsWith("data:")) return;
+    if (!url || url.startsWith("blob:") || url.startsWith("data:") || url.startsWith("jcba:")) return;
     this._ac = new AbortController();
     const signal = this._ac.signal;
     if (typeof location !== "undefined" && /^https?:$/.test(location.protocol)) {

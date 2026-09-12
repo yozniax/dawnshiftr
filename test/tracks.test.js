@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mergeTracks, toggleFavoriteList, trackHaystack, trackKey, tracksForPane, scrollChildIntoContainer, trackAtCursor, stepCursor } from "../js/tracks.js";
+import { mergeTracks, toggleFavoriteList, trackHaystack, trackKey, tracksForPane, scrollChildIntoContainer, trackAtCursor, stepCursor, stationSiteUrl } from "../js/tracks.js";
 
 test("trackKey prefers id", () => {
   assert.equal(trackKey({ id: "a", url: "http://x" }), "a");
@@ -28,6 +28,14 @@ test("mergeTracks keeps first copy", () => {
 
 test("haystack includes notes", () => {
   assert.match(trackHaystack({ title: "Soma", tags: "chill" }, "night work"), /night work/);
+});
+
+test("stationSiteUrl prefers homepage then social", () => {
+  assert.equal(stationSiteUrl({ homepage: "fmikaru.jp" }), "https://fmikaru.jp");
+  assert.equal(stationSiteUrl({ homepage: "https://radiokawagoe.com/" }), "https://radiokawagoe.com/");
+  assert.equal(stationSiteUrl({ social: ["https://x.com/radiokawagoe"] }), "https://x.com/radiokawagoe");
+  assert.equal(stationSiteUrl({ homepage: "javascript:alert(1)" }), "");
+  assert.equal(stationSiteUrl({}), "");
 });
 
 test("stations pane keeps popular rows even without a search", () => {

@@ -16,22 +16,22 @@ npm test
 
 ## Chrome extension
 
-Load unpacked:
-
-1. `chrome://extensions`
-2. Developer mode on
-3. Load unpacked → this folder (the one with `manifest.json`)
-4. Click the toolbar icon for a small player window. If a YouTube tab is open, that tab’s video starts so you can set a sleep timer from DAWNSHIFTr (Chrome cannot play a YouTube embed inside the extension page).
-
-Audio keeps playing in an offscreen document if you close the window.
-
-Chrome Web Store zip:
-
 ```sh
 npm run pack
 ```
 
-Upload `dist/dawnshiftr-chrome.zip` from the [Developer Dashboard](https://chrome.google.com/webstore/devconsole). Listing copy, privacy URL, screenshots, and permission notes: `store/CHROME.md`.
+Load unpacked:
+
+1. `chrome://extensions`
+2. Developer mode on
+3. Load unpacked → `dist/chrome` (not the repo root)
+4. Click the toolbar icon for the player popup.
+
+Audio keeps playing in an offscreen document if you close the window.
+
+Chrome Web Store zip is `dist/dawnshiftr-chrome.zip`. Upload it from the [Developer Dashboard](https://chrome.google.com/webstore/devconsole). Listing copy, privacy URL, screenshots, and permission notes: `store/CHROME.md`.
+
+The local preview (`npm start` → `http://127.0.0.1:43187`) is a different path: it proxies Radio Browser and streams through `server.mjs`. Use `dist/chrome` to check extension behavior.
 
 ## Features
 
@@ -39,8 +39,7 @@ Upload `dist/dawnshiftr-chrome.zip` from the [Developer Dashboard](https://chrom
 - Station notes
 - Hide a station with DELETE
 - Sleep timer: last ~15 seconds fade, except PT (25 min), which stops without fading and says “Your Time is up!”
-- STATIONS tab shows Radio Browser’s POPULAR TOP 50 until you search
-- Play the current YouTube tab from the toolbar icon
+- STATIONS tab opens with DoYoBe picks (FMいかる, ラジオ川越) then Radio Browser’s POPULAR TOP 50; search is Icecast/SHOUTcast HTTP audio only (no HLS, no Japanese terrestrial relays)
 - Live song title when the stream sends ICY metadata
 - Equalizer-style level display while playing
 
@@ -51,6 +50,7 @@ Upload `dist/dawnshiftr-chrome.zip` from the [Developer Dashboard](https://chrom
 | `Space` | Play / pause |
 | `Enter` | Play cursor |
 | `↑` / `↓` | Move cursor |
+| `U` | Open highlighted station site |
 | `F` / `N` / `X` | Fav / note / delete highlighted |
 | `-` / `=` | Volume down / up |
 | `S` / `Shift+S` | Stations tab |

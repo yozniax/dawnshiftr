@@ -30,6 +30,30 @@ export function trackHaystack(t, note = "") {
   return [t?.title, t?.country, t?.tags, note].filter(Boolean).join(" ").toLowerCase();
 }
 
+function asHttpUrl(value) {
+  const s = String(value || "").trim();
+  if (!s || /^javascript:/i.test(s) || /^data:/i.test(s)) return "";
+  if (/^https?:\/\//i.test(s)) return s;
+  if (s.startsWith("//")) return `https:${s}`;
+  if (/^[\w.-]+\.[a-z]{2,}([/:?#].*)?$/i.test(s)) return `https://${s}`;
+  return "";
+}
+
+/** Official site, or the first social URL if the station has no homepage. */
+export function stationSiteUrl(track) {
+  const home = asHttpUrl(track?.homepage);
+  if (home) return home;
+  const social = track?.social;
+  if (Array.isArray(social)) {
+    for (const item of social) {
+      const url = asHttpUrl(item);
+      if (url) return url;
+    }
+    return "";
+  }
+  return asHttpUrl(social);
+}
+
 export function tracksForPane(pane, { stations = [], favorites = [], history = [], countries = [] } = {}) {
   if (pane === "stations") return stations;
   if (pane === "fav") return favorites;

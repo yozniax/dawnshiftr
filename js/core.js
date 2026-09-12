@@ -1,8 +1,8 @@
 import { AudioEngine } from "./audio-engine.js";
-import { featuredTracks, resolveClick, unwrapStreamUrl } from "./radio.js";
+import { featuredTracks, resolveClick, unwrapStreamUrl, isPlayableStation } from "./radio.js";
+import { isJcbaUrl } from "./jcba.js";
 import { loadPersisted, savePersisted } from "./storage.js";
 import { IcyWatcher } from "./icy.js";
-import { parseYouTubeUrl, youtubeTrack, YouTubeEngine } from "./youtube.js";
 import { startTelemetry, recordSession, recordListen, recordFav, recordFavs } from "./telemetry.js";
 import { FADE_MS, PT_MINUTES, SLEEP_PRESETS, fadeAmount as sleepFade, isPomodoro, sleepChipLabel } from "./sleep.js";
 import { toggleFavoriteList, trackKey } from "./tracks.js";
@@ -59,6 +59,16 @@ export function isExtension() {
   return typeof chrome !== "undefined" && Boolean(chrome.runtime?.id);
 }
 
+function isRadioTrack(t) {
+  if (!t) return false;
+  if (t.kind === "youtube") return false;
+  const id = String(t.id || "");
+  if (id.startsWith("yt:") || id.startsWith("ytlist:")) return false;
+  const url = String(t.url || "");
+  if (/youtube\.com|youtu\.be/i.test(url)) return false;
+  return true;
+}
+
 export class PlayerCore {
   constructor(engine) {
     this.engine = engine || new AudioEngine();
@@ -73,12 +83,9 @@ export class PlayerCore {
     this._sleepDone = false;
     this._playGen = 0;
     this._switching = false;
-    this._source = "radio";
     this._listen = null;
     this._listenIv = 0;
-    this.youtube = new YouTubeEngine();
     this.engine.on("status", (status) => {
-      if (this._source === "youtube") return;
       if (this._switching && (status === "paused" || status === "stopped")) return;
       if (status === "playing") this._switching = false;
       this.state.status = status;
@@ -93,17 +100,16 @@ export class PlayerCore {
       this.broadcast("status");
     });
     this.engine.on("time", (t) => {
-      if (this._source === "youtube") return;
       if (this.state.live === t.live) return;
       this.state.live = t.live;
       this.broadcast("time");
     });
     this.engine.on("ended", () => {
-      if (this._switching || this._source === "youtube") return;
+      if (this._switching) return;
       void this.next();
     });
     this.engine.on("error", (msg) => {
-      if (this._switching || this._source === "youtube") return;
+      if (this._switching) return;
       if (this._skips < 6 && this.state.playlist.length > 1) {
         this._skips += 1;
         void this.next({ autoSkip: true });
@@ -112,36 +118,6 @@ export class PlayerCore {
       this.state.status = "error";
       this.state.playing = false;
       this.state.error = msg;
-      this.noteListenStop();
-      this.broadcast("status");
-    });
-    this.youtube.on("status", (status) => {
-      if (this._source !== "youtube") return;
-      if (this._switching && (status === "paused" || status === "stopped")) return;
-      if (status === "playing") this._switching = false;
-      this.state.status = status;
-      this.state.playing = status === "playing";
-      if (status === "playing") {
-        this.state.error = "";
-        this.noteListenStart(this.current());
-      } else if (status === "paused" || status === "stopped") {
-        this.noteListenStop();
-      }
-      this.broadcast("status");
-    });
-    this.youtube.on("ended", () => {
-      if (this._source !== "youtube") return;
-      this.stop();
-    });
-    this.youtube.on("title", (title) => {
-      if (this._source !== "youtube") return;
-      this.setSongTitle(title);
-    });
-    this.youtube.on("error", (msg) => {
-      if (this._source !== "youtube") return;
-      this.state.status = "error";
-      this.state.playing = false;
-      this.state.error = msg || "youtube error";
       this.noteListenStop();
       this.broadcast("status");
     });
@@ -159,16 +135,16 @@ export class PlayerCore {
 
   visible(tracks) {
     const hidden = new Set(this.state.hidden);
-    return tracks.filter((t) => !hidden.has(trackKey(t)));
+    return tracks.filter((t) => isRadioTrack(t) && !hidden.has(trackKey(t)));
   }
 
   async hydrate() {
     const saved = await loadPersisted();
     if (typeof saved.volume === "number") this.state.volume = Math.max(0, Math.min(100, saved.volume));
-    if (Array.isArray(saved.favorites)) this.state.favorites = saved.favorites;
+    if (Array.isArray(saved.favorites)) this.state.favorites = saved.favorites.filter(isRadioTrack);
     if (saved.notes && typeof saved.notes === "object") this.state.notes = saved.notes;
     if (Array.isArray(saved.hidden)) this.state.hidden = saved.hidden.filter(Boolean);
-    if (Array.isArray(saved.history)) this.state.history = saved.history.filter((t) => t?.url);
+    if (Array.isArray(saved.history)) this.state.history = saved.history.filter((t) => t?.url && isRadioTrack(t));
     if (typeof saved.sleepEndsAt === "number" && saved.sleepEndsAt > Date.now()) {
       this.state.sleepEndsAt = saved.sleepEndsAt;
       this.state.sleepMinutes = saved.sleepMinutes ?? null;
@@ -176,7 +152,8 @@ export class PlayerCore {
       this.armSleepAlarm();
     }
     if (Array.isArray(saved.playlist) && saved.playlist.length) {
-      this.state.playlist = this.visible(saved.playlist);
+      const next = this.visible(saved.playlist);
+      this.state.playlist = next.length ? next : this.visible(this.state.playlist);
       this.state.index = Math.min(saved.index ?? 0, Math.max(0, this.state.playlist.length - 1));
       this.state.cursor = this.state.index;
     } else {
@@ -219,7 +196,6 @@ export class PlayerCore {
   applyVolume() {
     const linear = (this.state.volume / 100) * this.fadeAmount();
     this.engine.setGain(linear);
-    this.youtube.setVolume(linear * 100);
   }
 
   noteListenStart(track) {
@@ -389,52 +365,6 @@ export class PlayerCore {
     this.icy.watch(url, (title) => this.setSongTitle(title));
   }
 
-  async playYouTube(input) {
-    const raw = typeof input === "string" ? { url: input } : input || {};
-    const parsed =
-      raw.videoId || raw.listId ? { videoId: raw.videoId || "", listId: raw.listId || "", url: raw.url } : parseYouTubeUrl(raw.url);
-    if (!parsed?.videoId && !parsed?.listId) {
-      this.state.error = "Not a YouTube URL";
-      this.state.status = "error";
-      this.state.playing = false;
-      this.broadcast("status");
-      return;
-    }
-    const track = youtubeTrack({ ...parsed, url: raw.url || parsed.url }, raw.title);
-    const gen = ++this._playGen;
-    this._switching = true;
-    this._source = "youtube";
-    this.icy.stop();
-    this.engine.stop();
-    this._loadedUrl = null;
-    this._streamUrl = null;
-    this.noteListenStop();
-    this.state.air = { ...track };
-    this.state.songTitle = "";
-    this.state.live = false;
-    this.state.error = "";
-    this.state.status = "buffering";
-    this.state.playing = false;
-    const key = trackKey(track);
-    const found = this.state.playlist.findIndex((t) => trackKey(t) === key);
-    if (found >= 0) this.state.index = found;
-    else {
-      this.state.playlist = [track, ...this.state.playlist];
-      this.state.index = 0;
-    }
-    if (!raw.autoSkip) this.rememberHistory(track);
-    this.broadcast("status");
-    this.youtube.load({
-      ...parsed,
-      tabId: raw.tabId,
-      alreadyPlaying: raw.alreadyPlaying,
-      url: raw.url || parsed.url,
-    });
-    this.applyVolume();
-    if (gen !== this._playGen) return;
-    this.persist();
-  }
-
   async playIndex(i, { autoplay = true, autoSkip = false, moveCursor = false } = {}) {
     if (!this.state.playlist.length) return;
     await this.unlock();
@@ -443,9 +373,6 @@ export class PlayerCore {
     this.state.index = ((i % this.state.playlist.length) + this.state.playlist.length) % this.state.playlist.length;
     if (moveCursor) this.state.cursor = this.state.index;
     const queued = this.state.playlist[this.state.index];
-    if (queued?.kind === "youtube") return this.playYouTube(queued);
-    this.youtube.stop({ silent: true });
-    this._source = "radio";
     const gen = ++this._playGen;
     this._switching = true;
     if (!autoSkip) this._skips = 0;
@@ -462,6 +389,14 @@ export class PlayerCore {
     if (resolved) url = resolved;
     url = await unwrapStreamUrl(url);
     if (gen !== this._playGen) return;
+    if (!isJcbaUrl(url) && !isPlayableStation({ ...track, url, url_resolved: url, name: track?.title })) {
+      this._switching = false;
+      this.state.playing = false;
+      this.state.status = "error";
+      this.state.error = "unsupported stream";
+      this.broadcast("status");
+      return;
+    }
     this._streamUrl = url;
     this.watchMeta(url);
     await this.engine.load(url);
@@ -491,18 +426,9 @@ export class PlayerCore {
     await this.unlock();
     if (this.state.status === "playing") {
       this.noteListenStop();
-      if (this._source === "youtube") this.youtube.pause();
-      else this.engine.pause();
+      this.engine.pause();
       this.state.playing = false;
       this.state.status = "paused";
-      this.broadcast("status");
-      return;
-    }
-    if (this._source === "youtube") {
-      this.youtube.play();
-      this.state.playing = true;
-      this.state.status = "playing";
-      this.noteListenStart(this.current());
       this.broadcast("status");
       return;
     }
@@ -523,8 +449,6 @@ export class PlayerCore {
   stop() {
     this.noteListenStop();
     this.icy.stop();
-    this.youtube.stop({ silent: true });
-    this._source = "radio";
     this.engine.stop();
     this.state.air = null;
     this.state.songTitle = "";
@@ -534,7 +458,7 @@ export class PlayerCore {
   }
 
   rememberHistory(track) {
-    if (!track?.url || track.file instanceof Blob) return;
+    if (!isRadioTrack(track) || track.file instanceof Blob) return;
     const { file, _blobUrl, blob, ...rest } = track;
     const key = trackKey(rest);
     if (!key) return;
